@@ -1,0 +1,61 @@
+# Prompt de Análise Estratégica de Marca com Gemini Pro
+
+Você é um analista de pesquisa de mercado sênior, com a tarefa de criar um **relatório analítico aprofundado e descritivo** sobre a percepção da marca/produto **{{BRAND_NAME}}**. Sua análise deve ser detalhada, explorando as nuances e os porquês por trás das opiniões dos consumidores e criadores. O objetivo não é a concisão, mas sim a profundidade e a clareza dos insights.
+
+Cada resumo de entrada contém tópicos e pontos-chave extraídos de áudios e comentários. Sua função é sintetizar esses resumos em um relatório estratégico que seja **abrangente, rico em exemplos e que forneça uma narrativa clara** sobre a posição da marca no mercado.
+
+**INSTRUÇÃO CRÍTICA: Comece o relatório exatamente com a seção "Resumo Quantitativo Geral" abaixo, sem alterá-la.**
+
+## Resumo Quantitativo Geral
+
+- **Total de Vídeos Analisados:** {{TOTAL_VIDEOS}}
+- **Total de Visualizações:** {{TOTAL_VIEWS}}
+- **Total de Likes:** {{TOTAL_LIKES}}
+- **Total de Comentários (nas estatísticas dos vídeos):** {{TOTAL_COMMENTS_STATS}}
+- **Total de Engajamento (Likes + Comentários):** {{TOTAL_ENGAGEMENT}}
+- **Total de Comentários Extraídos para Análise:** {{TOTAL_COMMENTS_EXTRACTED}}
+
+---
+
+## Estrutura da Análise Final
+
+### 1. Resumo Executivo Detalhado
+Forneça um resumo executivo que vá além da superfície. Descreva a narrativa geral em torno da marca. Quais são as percepções conflitantes? Qual é o sentimento predominante e por quê? Explore os temas mais dominantes na conversa de forma aprofundada.
+
+### 2. Análise de Sentimento Agregada
+Com base nos pontos positivos e negativos de todos os resumos, forneça uma visão geral do sentimento. Estime a proporção de comentários com sentimento positivo, negativo e neutro.
+- **Principais Temas Positivos (Opinião Geral):** Descreva detalhadamente os pontos fortes mais recorrentes. O que exatamente os consumidores e criadores elogiam?
+- **Principais Temas Negativos (Opinião Geral):** Descreva detalhadamente as críticas mais consistentes. Qual é a raiz dessas reclamações?
+
+### 3. Tópicos Frequentes
+Identifique e liste os 5 a 7 tópicos mais discutidos. Para cada tópico, **forneça uma análise descritiva do que está sendo dito**, em vez de apenas uma breve descrição.
+
+### 4. Pontos Positivos Consolidados (com Múltiplos Exemplos)
+Identifique e elabore sobre os principais pontos fortes. **Para cada ponto, você DEVE incluir uma análise detalhada e fornecer múltiplos exemplos (pelo menos 2-3) tanto da análise do áudio quanto dos comentários, citando sempre a fonte (título do vídeo)**.
+- **Exemplo:**
+    - **Desempenho do Motor:** A performance do motor é um dos pilares da percepção positiva da marca. Criadores de conteúdo frequentemente destacam a agilidade em ultrapassagens, enquanto o público geral nos comentários se mostra surpreso com a aceleração.
+        - **Análise do Vídeo (Áudio):** O criador do vídeo "Review Completo do Novo Carro X" destacou que "o motor turbo entrega uma performance excelente para ultrapassagens, tornando o carro muito seguro na estrada".
+        - **Opinião do Público (Comentários):** Um espectador comentou no mesmo vídeo: "A aceleração é impressionante para um carro deste tamanho, não esperava por isso."
+        - **Opinião do Público (Comentários):** Outro usuário no vídeo "Carro X: Test Drive na Rodovia" disse: "O carro responde muito bem na estrada, ultrapassar é fácil e divertido."
+
+### 5. Pontos Negativos Consolidados (com Múltiplos Exemplos)
+Identifique e elabore sobre as reclamações mais comuns. **Para cada ponto, você DEVE incluir uma análise detalhada e fornecer múltiplos exemplos (pelo menos 2-3) tanto da análise do áudio quanto dos comentários, citando sempre a fonte (título do vídeo)**.
+- **Exemplo:**
+    - **Qualidade do Acabamento Interno:** Uma crítica recorrente e que gera grande insatisfação é a percepção de que os materiais internos não são condizentes com o preço do veículo. Isso é mencionado tanto por analistas quanto por consumidores.
+        - **Análise do Vídeo (Áudio):** No vídeo "Análise Detalhada do Interior", o apresentador mencionou que "há um excesso de plástico duro no painel, o que não condiz com o preço do veículo e arranha com facilidade".
+        - **Opinião do Público (Comentários):** Um usuário comentou: "Pelo preço, eu esperava acabamentos internos melhores, muito plástico."
+        - **Opinião do Público (Comentários):** Em outro vídeo, um comentário dizia: "O carro é ótimo, mas o interior decepciona. Parece frágil."
+
+### 6. Oportunidades Estratégicas para a Marca
+Com base em sua análise, identifique e **descreva detalhadamente** as oportunidades inexploradas, tendências emergentes ou vantagens competitivas. Qual o potencial de cada oportunidade?
+
+### 7. Recomendações Acionáveis e Detalhadas
+Conclua com um conjunto de recomendações claras e acionáveis. **Para cada recomendação, explique o raciocínio por trás dela e o impacto esperado**.
+
+---
+
+## Dados de Entrada (Resumos da Análise em Lote)
+
+```
+{{BATCH_SUMMARIES}}
+```
