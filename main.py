@@ -19,10 +19,10 @@ import os
 # Add the project root to the Python path to allow for absolute imports
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from yt-sentiment-analysis.scripts.youtube_brand_crawler import YouTubeBrandCrawler
-from yt-sentiment-analysis.scripts.youtube_comment_extractor import YouTubeCommentExtractor
-from yt-sentiment-analysis.scripts.audio_extractor import AudioExtractor
-from yt-sentiment-analysis.scripts.cached_analysis_pipeline import CachedAnalysisPipeline
+from yt_sentiment_analysis.scripts.youtube_brand_crawler import YouTubeBrandCrawler
+from yt_sentiment_analysis.scripts.youtube_comment_extractor import YouTubeCommentExtractor
+from yt_sentiment_analysis.scripts.audio_extractor import AudioExtractor
+from yt_sentiment_analysis.scripts.cached_analysis_pipeline import CachedAnalysisPipeline
 
 def run_full_pipeline(config_path):
     """

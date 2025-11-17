@@ -1,0 +1,8 @@
+pandas
+google-api-python-client
+python-dotenv
+tqdm
+markdown
+google-generativeai
+yt-dlp
+tabulate # Optional: Used for formatting tables in reports

@@ -18,3 +18,6 @@ outputs/
 .idea/
 *.swp
 *.swo
+
+# Configuration files not to be committed
+config/config_gemini.ini
