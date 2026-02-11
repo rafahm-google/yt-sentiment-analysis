@@ -1,0 +1,25 @@
+# Virtual Environment
+venv/
+env/
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Local Config and Secrets
+cookies.txt
+config.ini
+downloaded_ids.txt
+
+# Outputs
+outputs/
+*.mp4
+*.mp3
+*.webm
+*.part
+*.ytdl
+
+# IDEs
+.vscode/
+.idea/

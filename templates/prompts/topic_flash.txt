@@ -1,0 +1,49 @@
+# Prompt para Análise de Tópico em Lote com Gemini Flash
+
+Você é um pesquisador cultural e analista de comportamento digital. Sua tarefa é analisar os **comentários E os vídeos (áudio e imagem)** de um lote de conteúdo sobre o tópico: **{{TOPIC_NAME}}**. 
+
+O objetivo é extrair as principais tendências, sentimentos e narrativas que emergem sobre este assunto, integrando a análise visual e auditiva do conteúdo dos criadores com a reação do público nos comentários.
+
+**Instruções:**
+1.  **Analise o vídeo completo:** Observe o cenário, expressões faciais, textos na tela e o tom de voz, além do conteúdo falado.
+2.  **Analise os comentários:** Identifique como a comunidade reage ao que é mostrado e dito.
+3.  **Identifique padrões:** Busque conexões entre a estética do vídeo e o tipo de engajamento que ele gera.
+4.  Gere um resumo em formato Markdown, **sempre incluindo exemplos específicos**.
+
+**Vídeos neste Lote:**
+```
+{{VIDEO_METADATA}}
+```
+
+---
+
+## Resumo do Lote: {{TOPIC_NAME}}
+
+### 1. Narrativas Centrais (Geral)
+Liste os 3-5 temas ou narrativas mais fortes que emergem neste lote.
+
+### 2. Análise do Conteúdo (Visual e Auditivo)
+Resuma as abordagens dos criadores.
+- **Aspectos Visuais:** O que é mostrado? (Ex: Cenários, produtos, expressões, memes, textos).
+- **Discurso e Áudio:** Qual o tom? (Ex: Humorístico, sério, indignado, educativo).
+    - **Exemplo:** "Descrição do visual/áudio" (Fonte: Vídeo "Título do Vídeo")
+
+### 3. Voz da Comunidade (Opinião do Público nos Comentários)
+Resuma o que os espectadores estão discutindo.
+- **Reações ao Conteúdo:** Eles concordam com o vídeo? Comentam sobre algo específico que viram?
+    - **Exemplo:**
+        - **Tema:**
+            - **Citação:** "Texto do comentário"
+            - **Vídeo:** "Título do Vídeo"
+
+---
+
+## Dados de Entrada
+
+**- Comentários:**
+```
+{{COMMENTS_DATA}}
+```
+
+**- Arquivos de Mídia (Vídeo/Áudio):**
+{{MEDIA_FILES_LIST}}

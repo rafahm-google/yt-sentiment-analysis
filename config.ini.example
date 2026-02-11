@@ -1,0 +1,41 @@
+[Crawler]
+# --- Configuration for the YouTube Brand Crawler ---
+search_terms = copa do mundo
+search_modifiers = futebol
+exclude_keywords = EUA, Americano, kings, Kings, League, league, jogo completo, melhores momentos
+min_view_count = 100000
+# Options: relevance, viewCount, engagement
+sort_by = relevance
+max_results = 100
+
+[AudioExtractor]
+# --- Configuration for the Audio Extractor ---
+audio_folder_name = audio
+
+[Analysis]
+# --- Configuration for the Gemini-Powered Analysis ---
+
+# Model for the final, high-level synthesis.
+pro_model_name = gemini-3-pro-preview
+
+# Lighter model for summarizing individual batches.
+flash_model_name = gemini-3-flash-preview
+
+# Path to the prompt for the final report synthesis (Gemini Pro).
+pro_prompt_template_path = templates/prompts/topic_analysis.txt
+
+# Path to the prompt for summarizing batches (Gemini Flash).
+flash_prompt_template_path = templates/prompts/topic_flash.txt
+
+# Number of videos to process in a single batch.
+batch_size = 3
+
+# Directory to store intermediate analysis summaries.
+cache_dir = outputs/cache
+
+# The format for the final report. Options: html, markdown
+report_format = html
+
+# Path to the specific comments CSV file to analyze.
+# This is now read automatically based on the brand name.
+# comments_csv_path = outputs/Volkswagen_Tera/Volkswagen_Tera_raw_comments.csv
