@@ -1,4 +1,4 @@
-# YouTube Brand Sentiment Analysis
+# YouTube Sentiment Analysis
 
 This project performs a comprehensive sentiment analysis of a brand on YouTube using Google's Gemini AI. It crawls for relevant videos, extracts comments and audio, and generates a strategic report summarizing brand perception.
 
