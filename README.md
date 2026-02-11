@@ -1,17 +1,15 @@
 # YouTube Sentiment Analysis
 
-(THIS IS NOT AN OFFICIAL GOOGLE TOOL)
-
 This project performs a comprehensive sentiment analysis of a brand on YouTube using Google's Gemini AI. It crawls for relevant videos, extracts comments and audio, and generates a strategic report summarizing brand perception.
 
-## ⚠️ Legal & Ethical Disclaimer
+## ⚠️ Disclaimer
 
 **Please read this carefully before using this tool.**
 
 1.  **Terms of Service Compliance:** This tool automates interactions with YouTube. Users are strictly responsible for ensuring their usage complies with [YouTube's Terms of Service](https://www.youtube.com/t/terms).
 2.  **Cookie Usage:** This tool may require the use of browser cookies (`cookies.txt`) to access certain content (e.g., age-restricted videos) or to avoid bot detection. By providing your cookies, you are authorizing this script to act on your behalf. **Do not share your `cookies.txt` file with anyone.**
 3.  **Rate Limiting:** Aggressive scraping can lead to IP bans or account restrictions. This tool is intended for personal research and analysis, not for high-volume data harvesting.
-4.  **Liability:** The authors and contributors of this repository are not liable for any consequences resulting from the use of this software, including but not limited to account suspension or legal action. Use this tool at your own risk.
+
 
 ## Project Structure
 
