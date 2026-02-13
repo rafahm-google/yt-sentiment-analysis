@@ -3,8 +3,12 @@
 search_terms = copa do mundo
 search_modifiers = futebol
 exclude_keywords = EUA, Americano, kings, Kings, League, league, jogo completo, melhores momentos
+# Options: videos, shorts, both
+video_type = both
+# Filter videos published after a specific date (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ). Leave empty for no date filter.
+published_after = 
 min_view_count = 100000
-# Options: relevance, viewCount, engagement
+# Options: relevance, viewCount, engagement, date
 sort_by = relevance
 max_results = 100
 

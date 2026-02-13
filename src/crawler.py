@@ -23,6 +23,8 @@ from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
 import re
 from tqdm import tqdm
+from datetime import datetime
+import requests
 
 class YouTubeBrandCrawler:
     """
@@ -62,6 +64,26 @@ class YouTubeBrandCrawler:
         self.search_terms = config.get('Crawler', 'search_terms')
         self.search_modifiers = [mod.strip() for mod in config.get('Crawler', 'search_modifiers').split(',')]
         self.exclude_keywords = [key.strip().lower() for key in config.get('Crawler', 'exclude_keywords').split(',')]
+        
+        # New filters
+        self.video_type = config.get('Crawler', 'video_type', fallback='both').lower()
+        self.published_after = config.get('Crawler', 'published_after', fallback='').strip()
+        
+        # Format published_after to RFC 3339 if present
+        if self.published_after:
+            try:
+                # Try parsing full ISO format first
+                dt = datetime.fromisoformat(self.published_after.replace('Z', '+00:00'))
+                self.published_after = dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+            except ValueError:
+                try:
+                    # Try YYYY-MM-DD format and append time
+                    dt = datetime.strptime(self.published_after, "%Y-%m-%d")
+                    self.published_after = dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+                except ValueError:
+                     print(f"WARNING: Invalid date format for 'published_after' ({self.published_after}). Ignoring filter.")
+                     self.published_after = None
+
         self.min_view_count = config.getint('Crawler', 'min_view_count')
         self.sort_by = config.get('Crawler', 'sort_by')
         self.max_results = config.getint('Crawler', 'max_results')
@@ -73,6 +95,10 @@ class YouTubeBrandCrawler:
         os.makedirs(self.output_dir, exist_ok=True)
         
         print(f"SUCCESS: Configuration loaded for brand '{self.search_terms}'.")
+        if self.video_type != 'both':
+            print(f"Filtering for video type: {self.video_type}")
+        if self.published_after:
+            print(f"Filtering for videos published after: {self.published_after}")
         print(f"Output will be saved to '{self.output_path}'")
 
     def run_crawler(self):
@@ -90,17 +116,35 @@ class YouTubeBrandCrawler:
         video_ids = set()
         next_page_token = None
         
+        # Prepare search arguments
+        search_kwargs = {
+            'q': query,
+            'part': "id",
+            'type': "video",
+            'maxResults': 50,
+            'regionCode': "BR",
+        }
+        
+        # Mapping sort_by config to API 'order' parameter
+        if self.sort_by == 'date':
+            search_kwargs['order'] = 'date'
+        elif self.sort_by == 'viewCount':
+             search_kwargs['order'] = 'viewCount'
+        # Default is relevance, which is what we want for 'relevance' and 'engagement' (since engagement is calculated locally)
+        
+        # Optimization: Only use videoDuration='short' if we strictly want Shorts.
+        # For 'videos', we must fetch everything because 'short' duration != Shorts format.
+        if self.video_type == 'shorts':
+            search_kwargs['videoDuration'] = 'short'
+        
+        if self.published_after:
+            search_kwargs['publishedAfter'] = self.published_after
+
         # Fetch multiple pages of results to get a wider selection
         for _ in range(3): # Fetch up to 3 pages of results
             try:
-                search_response = self.youtube_api.search().list(
-                    q=query,
-                    part="id",
-                    type="video",
-                    maxResults=50,
-                    regionCode="BR",
-                    pageToken=next_page_token
-                ).execute()
+                search_kwargs['pageToken'] = next_page_token
+                search_response = self.youtube_api.search().list(**search_kwargs).execute()
                 
                 for item in search_response.get("items", []):
                     video_ids.add(item["id"]["videoId"])
@@ -142,7 +186,7 @@ class YouTubeBrandCrawler:
             batch_ids = video_ids[i:i+50]
             try:
                 details_response = self.youtube_api.videos().list(
-                    part="snippet,statistics",
+                    part="snippet,statistics,contentDetails",
                     id=",".join(batch_ids)
                 ).execute()
                 video_details.extend(details_response.get("items", []))
@@ -150,10 +194,38 @@ class YouTubeBrandCrawler:
                 print(f"An HTTP error {e.resp.status} occurred while fetching details:\n{e.content}")
         return video_details
 
+    def _is_short_video(self, video_id):
+        """
+        Determines if a video is a YouTube Short by checking for redirection.
+        Returns True if it's a Short, False otherwise.
+        """
+        try:
+            url = f"https://www.youtube.com/shorts/{video_id}"
+            # We only need the headers, so use HEAD request.
+            # Allow redirects=False to check the status code directly.
+            response = requests.head(url, allow_redirects=False, timeout=5)
+            
+            # 200 OK means it resides at /shorts/, so it's a Short.
+            # 303 See Other (or 302) means it redirects to /watch, so it's a regular video.
+            return response.status_code == 200
+        except requests.RequestException:
+            # If verification fails (e.g. timeout), default to False or log warning.
+            # For robustness, we'll assume it's NOT a short if we can't verify.
+            return False
+
     def _process_and_filter_videos(self, video_details):
         """Processes the raw API response, filters it, and returns a DataFrame."""
         processed_videos = []
-        for video in video_details:
+        
+        # If filtering by type, we might need to check many videos.
+        # Doing this sequentially is slow. In a production app, we'd use asyncio.
+        # For now, we'll check inside the loop but be aware of the latency.
+        
+        desc = "Processing Videos"
+        if self.video_type != 'both':
+            desc += f" (Checking for {self.video_type})"
+
+        for video in tqdm(video_details, desc=desc):
             title = video["snippet"]["title"]
             
             # 1. Filter by excluded keywords
@@ -167,6 +239,15 @@ class YouTubeBrandCrawler:
             if view_count < self.min_view_count:
                 continue
 
+            # 3. Filter by video type (Shorts vs Videos) - Precise Check
+            if self.video_type != 'both':
+                is_short = self._is_short_video(video["id"])
+                
+                if self.video_type == 'shorts' and not is_short:
+                    continue
+                if self.video_type == 'videos' and is_short:
+                    continue
+
             like_count = int(stats.get("likeCount", 0))
             comment_count = int(stats.get("commentCount", 0))
             
@@ -179,7 +260,9 @@ class YouTubeBrandCrawler:
                 "likes": like_count,
                 "comments": comment_count,
                 "engagement": like_count + comment_count,
-                "description": video["snippet"]["description"]
+                "description": video["snippet"]["description"],
+                "duration": video.get("contentDetails", {}).get("duration", ""),
+                "published_at": video.get("snippet", {}).get("publishedAt", "")
             })
         
         return pd.DataFrame(processed_videos)
@@ -190,6 +273,8 @@ class YouTubeBrandCrawler:
             return df.sort_values(by="views", ascending=False).reset_index(drop=True)
         elif self.sort_by == 'engagement':
             return df.sort_values(by="engagement", ascending=False).reset_index(drop=True)
+        elif self.sort_by == 'date':
+            return df.sort_values(by="published_at", ascending=False).reset_index(drop=True)
         else: # Default to relevance (which is the default API return order, so no-op)
             return df
 

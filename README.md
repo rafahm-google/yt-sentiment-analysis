@@ -57,6 +57,11 @@ This project performs a comprehensive sentiment analysis of a brand on YouTube u
         cp config.ini.example config.ini
         ```
     - Open `config.ini` and set your `search_terms`, `models`, and other preferences.
+    - **Advanced Filtering & Sorting:**
+        - `video_type`: Filter by format. Options: `shorts`, `videos`, or `both`.
+        - `published_after`: Only analyze videos posted after a specific date (Format: `YYYY-MM-DD`).
+        - `sort_by`: Order results by `relevance`, `viewCount`, `engagement`, or `date` (latest first).
+        - `max_results`: Limit the number of videos to analyze (e.g., 100).
 
 ## Usage
 
