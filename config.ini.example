@@ -2,6 +2,8 @@
 # --- Configuration for the YouTube Brand Crawler ---
 search_terms = copa do mundo
 search_modifiers = futebol
+# Optional: The 2-letter ISO country code (e.g., BR, US) to restrict search results to that region.
+region_code = BR
 exclude_keywords = EUA, Americano, kings, Kings, League, league, jogo completo, melhores momentos
 # Options: videos, shorts, both
 video_type = both

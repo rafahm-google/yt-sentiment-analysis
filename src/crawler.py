@@ -62,12 +62,13 @@ class YouTubeBrandCrawler:
         config.read(config_path)
         
         self.search_terms = config.get('Crawler', 'search_terms')
-        self.search_modifiers = [mod.strip() for mod in config.get('Crawler', 'search_modifiers').split(',')]
-        self.exclude_keywords = [key.strip().lower() for key in config.get('Crawler', 'exclude_keywords').split(',')]
+        self.search_modifiers = [mod.strip() for mod in config.get('Crawler', 'search_modifiers').split(',') if mod.strip()]
+        self.exclude_keywords = [key.strip().lower() for key in config.get('Crawler', 'exclude_keywords').split(',') if key.strip()]
         
         # New filters
         self.video_type = config.get('Crawler', 'video_type', fallback='both').lower()
         self.published_after = config.get('Crawler', 'published_after', fallback='').strip()
+        self.region_code = config.get('Crawler', 'region_code', fallback='US').strip().upper()
         
         # Format published_after to RFC 3339 if present
         if self.published_after:
@@ -144,8 +145,10 @@ class YouTubeBrandCrawler:
             'part': "id",
             'type': "video",
             'maxResults': 50,
-            'regionCode': "BR",
         }
+        
+        if self.region_code:
+            search_kwargs_base['regionCode'] = self.region_code
         
         if self.sort_by == 'date':
             search_kwargs_base['order'] = 'date'

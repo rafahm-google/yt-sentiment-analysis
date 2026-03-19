@@ -16,6 +16,8 @@ import argparse
 import configparser
 import re
 import sys
+import time
+import random
 
 class VideoDownloader:
     def __init__(self, config_path):
@@ -92,22 +94,49 @@ class VideoDownloader:
                 # Command to download video <= 480p to save space but keep visual context
                 command = [
                     yt_dlp_path,
+                    '--no-check-certificate', '--retries', 'infinite',
                     '-f', 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]', 
                     '--merge-output-format', 'mp4',
                     '--output', output_filename,
                     video_url,
-                    '--extractor-args', 'youtube:player_client=default'
+                    '--no-js-runtimes',
+                    '--js-runtimes', 'node',
+                    '--extractor-args', 'youtube:player_client=tv,default'
                 ]
                 
+                success = False
                 if os.path.exists(cookies_path):
-                    command.extend(['--cookies', cookies_path])
-                
-                # Run quietly
-                subprocess.run(command, check=True, capture_output=True, text=True)
+                    try:
+                        cmd_with_cookies = command + ['--cookies', cookies_path]
+                        subprocess.run(cmd_with_cookies, check=True, capture_output=True, text=True)
+                        success = True
+                    except subprocess.CalledProcessError as e:
+                        stderr_output = e.stderr.strip()
+                        if "Sign in to confirm" in stderr_output or "HTTP Error 400" in stderr_output or "HTTP Error 403" in stderr_output:
+                            tqdm.write(f"\nWarning: cookies.txt failed, falling back to Chrome browser cookies for {video_url}...")
+                            try:
+                                cmd_with_browser = command + ['--cookies-from-browser', 'chrome']
+                                subprocess.run(cmd_with_browser, check=True, capture_output=True, text=True)
+                                success = True
+                            except Exception as browser_e:
+                                tqdm.write(f"\nChrome browser fallback failed (is Chrome installed?): {browser_e}")
+                                raise e # Re-raise original error to log as normal failed video
+                        else:
+                            raise e
+                else:
+                    subprocess.run(command, check=True, capture_output=True, text=True)
+                    success = True
+
+                if success:
+                    # Randomized sleep between 15 and 60 seconds to avoid ban
+                    sleep_time = random.randint(15, 60)
+                    tqdm.write(f" -> Success! Sleeping for {sleep_time}s to avoid rate limits...")
+                    time.sleep(sleep_time)
+
             except subprocess.CalledProcessError as e:
-                print(f"\nWarning: Could not download video from {video_url}. Error: {e.stderr.strip()}")
+                tqdm.write(f"\nWarning: Could not download video from {video_url}. Error: {e.stderr.strip()}")
             except Exception as e:
-                print(f"\nAn unexpected error occurred for {video_url}: {e}")
+                tqdm.write(f"\nAn unexpected error occurred for {video_url}: {e}")
 
         print("\n\nSUCCESS: Video downloading complete!")
 
