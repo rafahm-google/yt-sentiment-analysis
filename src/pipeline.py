@@ -14,7 +14,8 @@
 import os
 import configparser
 import pandas as pd
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import re
 from tqdm import tqdm
 import markdown
@@ -35,8 +36,8 @@ class CachedAnalysisPipeline:
         self._load_environment_variables()
         self._load_configuration()
         
-        genai.configure(api_key=self.google_api_key)
-        print("SUCCESS: Google AI SDK configured.")
+        self.client = genai.Client(api_key=self.google_api_key)
+        print("SUCCESS: Google GenAI Client initialized.")
 
     def _load_environment_variables(self):
         load_dotenv(os.path.join(self.project_root, '.env'))
@@ -58,6 +59,8 @@ class CachedAnalysisPipeline:
         self.flash_prompt_path = os.path.join(self.project_root, config.get('Analysis', 'flash_prompt_template_path'))
         self.batch_size = config.getint('Analysis', 'batch_size')
         self.report_format = config.get('Analysis', 'report_format')
+        self.additional_context = config.get('Analysis', 'additional_context', fallback='')
+        self.output_language = config.get('Analysis', 'output_language', fallback='Portuguese')
         
         self.output_dir = os.path.join(self.project_root, 'outputs', self.safe_brand_name)
         self.videos_csv_path = os.path.join(self.output_dir, f"{self.safe_brand_name}_discovered_videos.csv")
@@ -108,22 +111,22 @@ class CachedAnalysisPipeline:
             return pd.DataFrame()
 
     def _process_batches(self, videos_df, comments_df):
-        all_summaries = []
+        import math
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
         num_batches = math.ceil(len(videos_df) / self.batch_size)
-        print(f"\nStarting Stage 1: Processing {len(videos_df)} videos in {num_batches} batches...")
-
-        for i in tqdm(range(num_batches), desc="Processing Batches"):
+        all_summaries = [None] * num_batches # Pre-allocate to maintain order
+        
+        def process_single_batch(i):
             batch_num = i + 1
             cache_file_path = os.path.join(self.cache_dir, f"batch_{batch_num}_summary.txt")
 
             if os.path.exists(cache_file_path):
-                print(f"\nFound cached summary for batch {batch_num}. Loading from cache.")
+                print(f"Found cached summary for batch {batch_num}. Loading from cache.", flush=True)
                 with open(cache_file_path, 'r', encoding='utf-8') as f:
-                    summary = f.read()
-                all_summaries.append(summary)
-                continue
+                    return i, f.read()
 
-            print(f"\nProcessing batch {batch_num}/{num_batches}...")
+            print(f"Processing batch {batch_num}/{num_batches}...", flush=True)
             start_index = i * self.batch_size
             end_index = start_index + self.batch_size
             batch_videos = videos_df.iloc[start_index:end_index]
@@ -131,49 +134,31 @@ class CachedAnalysisPipeline:
             batch_video_ids = batch_videos['video_id'].tolist()
             batch_comments = comments_df[comments_df['id_video'].isin(batch_video_ids)]
             
-            # Check for video files first, then audio files
-            media_files = []
-            media_type = "video"
-            
-            for vid in batch_video_ids:
-                video_path = os.path.join(self.video_dir, f"{vid}.mp4")
-                if os.path.exists(video_path):
-                    media_files.append(video_path)
-                else:
-                    audio_path = os.path.join(self.audio_dir, f"{vid}.mp3")
-                    if os.path.exists(audio_path):
-                        media_files.append(audio_path)
-                        if media_type == "video": media_type = "mixed" # Mark as mixed if we have both or fallback
-            
-            if not media_files:
-                print(f"Warning: No media files (video or audio) found for batch {batch_num}.")
-
-            summary = self._run_flash_analysis(batch_videos, batch_comments, media_files)
+            summary = self._run_flash_analysis(batch_videos, batch_comments)
             
             if summary:
                 with open(cache_file_path, 'w', encoding='utf-8') as f:
                     f.write(summary)
-                print(f"SUCCESS: Saved summary for batch {batch_num} to cache.")
-                all_summaries.append(summary)
+                print(f"SUCCESS: Saved summary for batch {batch_num} to cache.", flush=True)
+                return i, summary
             else:
                 print(f"Warning: Failed to generate summary for batch {batch_num}.")
+                return i, None
+
+        print(f"\nStarting Stage 1 (Parallel): Processing {len(videos_df)} videos in {num_batches} batches...", flush=True)
         
-        return all_summaries
+        # Use 5 workers to avoid overwhelming rate limits
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(process_single_batch, i) for i in range(num_batches)]
+            for future in as_completed(futures):
+                i, summary = future.result()
+                all_summaries[i] = summary
+        
+        # Filter out None values if any failed
+        valid_summaries = [s for s in all_summaries if s is not None]
+        return valid_summaries
 
-    def _wait_for_files_active(self, files):
-        """Waits for uploaded files to be in ACTIVE state."""
-        print("Waiting for file processing...", end="")
-        for name in (f.name for f in files):
-            file = genai.get_file(name)
-            while file.state.name == "PROCESSING":
-                print(".", end="", flush=True)
-                time.sleep(2)
-                file = genai.get_file(name)
-            if file.state.name != "ACTIVE":
-                raise Exception(f"File {file.name} failed to process: {file.state.name}")
-        print("Done")
-
-    def _run_flash_analysis(self, videos, comments, media_files):
+    def _run_flash_analysis(self, videos, comments):
         with open(self.flash_prompt_path, 'r', encoding='utf-8') as f:
             prompt_template = f.read()
 
@@ -186,15 +171,20 @@ class CachedAnalysisPipeline:
         prompt = prompt.replace('{{COMMENTS_DATA}}', comments_text)
 
         try:
-            model = genai.GenerativeModel(self.flash_model_name)
-            uploaded_files = [genai.upload_file(path=f) for f in media_files]
-            self._wait_for_files_active(uploaded_files)
+            contents = [prompt]
+            file_list_str = ""
+            for _, row in videos.iterrows():
+                video_url = row['url']
+                contents.append(types.Part(file_data=types.FileData(file_uri=video_url)))
+                file_list_str += f"- {video_url}\n"
             
-            file_list_str = "\n".join([f"- {os.path.basename(f.name)}" for f in uploaded_files])
-            # Replace AUDIO_FILES_LIST for backward compatibility or generic MEDIA_FILES_LIST
             final_prompt = prompt.replace('{{AUDIO_FILES_LIST}}', file_list_str).replace('{{MEDIA_FILES_LIST}}', file_list_str)
-            
-            response = model.generate_content([final_prompt] + uploaded_files)
+            contents[0] = final_prompt
+
+            response = self.client.models.generate_content(
+                model=self.flash_model_name,
+                contents=contents
+            )
             return response.text
         except Exception as e:
             print(f"An error occurred during Gemini Flash API call: {e}")
@@ -222,15 +212,47 @@ class CachedAnalysisPipeline:
         prompt = prompt.replace('{{TOTAL_COMMENTS_STATS}}', f"{total_comments_stats:,}")
         prompt = prompt.replace('{{TOTAL_ENGAGEMENT}}', f"{total_engagement:,}")
         prompt = prompt.replace('{{TOTAL_COMMENTS_EXTRACTED}}', f"{total_comments_extracted:,}")
+        
+        if self.additional_context:
+            prompt += f"\n\nInformações/Diretrizes Adicionais do Usuário (PRIORIDADE MÁXIMA):\n{self.additional_context}"
+            prompt += "\nIMPORTANTE: Priorize as diretrizes adicionais do usuário acima sobre as regras do prompt original se houver conflito."
+            
+        prompt += f"\n\nIDIOMA DE SAÍDA: O relatório final DEVE ser gerado no idioma: {self.output_language}."
 
         try:
-            model = genai.GenerativeModel(self.pro_model_name)
-            response = model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.pro_model_name,
+                contents=prompt
+            )
             print("SUCCESS: Final report generated by Gemini Pro.")
             return response.text
         except Exception as e:
-            print(f"An error occurred during Gemini Pro API call: {e}")
-            return None
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                print("Gemini Pro overloaded (503). Retrying once after 5 seconds...")
+                import time
+                time.sleep(5)
+                try:
+                    response = self.client.models.generate_content(
+                        model=self.pro_model_name,
+                        contents=prompt
+                    )
+                    print("SUCCESS: Final report generated by Gemini Pro after retry.")
+                    return response.text
+                except Exception as e2:
+                    print(f"Gemini Pro failed again. Falling back to Gemini Flash ({self.flash_model_name})...")
+                    try:
+                        response = self.client.models.generate_content(
+                            model=self.flash_model_name,
+                            contents=prompt
+                        )
+                        print("SUCCESS: Final report generated by Gemini Flash.")
+                        return response.text
+                    except Exception as e3:
+                        print(f"All models failed: {e3}")
+                        return None
+            else:
+                print(f"An error occurred during Gemini Pro API call: {e}")
+                return None
 
     def _generate_report_file(self, report_content, videos_df):
         output_path = os.path.join(self.output_dir, f"{self.safe_brand_name}_strategic_report.{self.report_format}")

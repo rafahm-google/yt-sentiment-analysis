@@ -54,7 +54,7 @@ class YouTubeCommentExtractor:
         
         self.input_csv_path = os.path.join(self.project_root, 'outputs', safe_brand_name, f"{safe_brand_name}_discovered_videos.csv")
         self.output_csv_path = os.path.join(self.project_root, 'outputs', safe_brand_name, f"{safe_brand_name}_raw_comments.csv")
-        self.max_comments_per_video = config.getint('Crawler', 'max_results', fallback=100) # Reuse max_results for comments
+        self.max_comments_per_video = config.getint('Crawler', 'max_comments_per_video', fallback=100)
 
     def extract_comments(self):
         """
@@ -128,11 +128,11 @@ class YouTubeCommentExtractor:
                         'publicado_em': comment['publishedAt'],
                     })
                     count += 1
-                    if count >= max_comments:
+                    if max_comments != -1 and count >= max_comments:
                         break
 
                 next_page_token = response.get('nextPageToken')
-                if not next_page_token or count >= max_comments:
+                if not next_page_token or (max_comments != -1 and count >= max_comments):
                     break
 
             except HttpError as e:

@@ -6,9 +6,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 from crawler import YouTubeBrandCrawler
-from downloader import VideoDownloader
 from comment_extractor import YouTubeCommentExtractor
-from audio_extractor import AudioExtractor
 from pipeline import CachedAnalysisPipeline
 
 def main():
@@ -19,7 +17,7 @@ def main():
     print("!"*60 + "\n")
 
     parser = argparse.ArgumentParser(description="Sentiment Analysis Pipeline")
-    parser.add_argument('step', choices=['all', 'crawl', 'download', 'comments', 'audio', 'analyze'], 
+    parser.add_argument('step', choices=['all', 'crawl', 'comments', 'analyze', 'slides'], 
                         help="The step of the pipeline to run.")
     parser.add_argument('--config', default='config.ini', help="Path to configuration file.")
     
@@ -28,7 +26,7 @@ def main():
     # Ensure config path is absolute or correctly relative
     if not os.path.exists(args.config):
         print(f"Error: Configuration file '{args.config}' not found.")
-        return
+        sys.exit(1)
         
     config_path = os.path.abspath(args.config)
     
@@ -40,12 +38,7 @@ def main():
             crawler = YouTubeBrandCrawler(config_path=config_path)
             crawler.run_crawler()
             
-        if args.step in ['all', 'download']:
-            print("\n" + "="*40)
-            print(" STEP 2: DOWNLOADING VIDEOS ")
-            print("="*40)
-            downloader = VideoDownloader(config_path=config_path)
-            downloader.download_videos()
+
             
         if args.step in ['all', 'comments']:
             print("\n" + "="*40)
@@ -54,12 +47,7 @@ def main():
             extractor = YouTubeCommentExtractor(config_path=config_path)
             extractor.extract_comments()
 
-        if args.step == 'audio':
-            print("\n" + "="*40)
-            print(" EXTRA STEP: EXTRACTING AUDIO ")
-            print("="*40)
-            extractor = AudioExtractor(config_path=config_path)
-            extractor.extract_audio()
+
             
         if args.step in ['all', 'analyze']:
             print("\n" + "="*40)
@@ -67,6 +55,13 @@ def main():
             print("="*40)
             pipeline = CachedAnalysisPipeline(config_path=config_path)
             pipeline.run_pipeline()
+            
+        if args.step in ['all', 'slides']:
+            print("\n" + "="*40)
+            print(" STEP 5: GENERATING SLIDES ")
+            print("="*40)
+            from generate_slides_final import run_slide_generation
+            run_slide_generation(config_path=config_path)
             
     except Exception as e:
         print(f"\nAn error occurred during execution: {e}")

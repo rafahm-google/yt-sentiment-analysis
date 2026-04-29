@@ -5,6 +5,9 @@ python-dotenv
 tqdm
 markdown
 requests
-yt-dlp&gt;=2026.03.13
+yt-dlp>=2026.03.13
 streamlit
 tabulate
+google-genai
+notebooklm-py[browser]
+python-pptx

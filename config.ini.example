@@ -29,7 +29,7 @@ audio_folder_name = audio
 pro_model_name = gemini-3.1-pro-preview
 
 # Lighter model for summarizing individual batches.
-flash_model_name = gemini-3.1-flash-preview
+flash_model_name = gemini-3-flash-preview
 
 # Path to the prompt for the final report synthesis (Gemini Pro).
 pro_prompt_template_path = templates/prompts/topic_analysis.txt
