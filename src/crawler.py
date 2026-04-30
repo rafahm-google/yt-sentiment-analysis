@@ -25,6 +25,7 @@ import re
 from tqdm import tqdm
 from datetime import datetime
 import requests
+import json
 
 class YouTubeBrandCrawler:
     """
@@ -164,7 +165,7 @@ class YouTubeBrandCrawler:
         def fetch_pages(search_q, channel_id=None):
             next_page_token = None
             v_ids = set()
-            for _ in range(3): # Fetch up to 3 pages per search
+            for _ in range(2): # Fetch up to 2 pages per search (User reduced from 3)
                 try:
                     kwargs = search_kwargs_base.copy()
                     kwargs["q"] = search_q
@@ -186,13 +187,25 @@ class YouTubeBrandCrawler:
                     break
             return v_ids
 
-        if target_channel_ids:
-            print(f"\nTargeting specific channels for videos...")
-            for c_id in target_channel_ids:
-                video_ids.update(fetch_pages(query, c_id))
+        cache_file_path = os.path.join(self.output_dir, "search_cache.json")
+        
+        if os.path.exists(cache_file_path):
+            print(f"\nFound cached search results in '{cache_file_path}'. Loading...")
+            with open(cache_file_path, 'r', encoding='utf-8') as f:
+                video_ids = set(json.load(f))
         else:
-            print("\nSearching globally for videos...")
-            video_ids.update(fetch_pages(query))
+            if target_channel_ids:
+                print(f"\nTargeting specific channels for videos...")
+                for c_id in target_channel_ids:
+                    video_ids.update(fetch_pages(query, c_id))
+            else:
+                print("\nSearching globally for videos...")
+                video_ids.update(fetch_pages(query))
+                
+            # Save to cache
+            with open(cache_file_path, 'w', encoding='utf-8') as f:
+                json.dump(list(video_ids), f)
+            print(f"Saved search results to cache: '{cache_file_path}'")
 
         if not video_ids:
             print("No videos found matching the search criteria. Exiting.")

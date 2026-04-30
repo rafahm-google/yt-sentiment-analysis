@@ -86,9 +86,9 @@ with tab1:
     with col1:
         st.header("1. Configuration")
         
-        with st.expander("API Keys (.env)", expanded=False):
-            gemini_key = st.text_input("GEMINI_API_KEY", value=os.getenv("GEMINI_API_KEY", ""), type="password")
-            youtube_key = st.text_input("YOUTUBE_API_KEY", value=os.getenv("YOUTUBE_API_KEY", ""), type="password")
+        with st.expander("API Keys", expanded=False):
+            gemini_key = st.text_input("GEMINI_API_KEY", value="", type="password")
+            youtube_key = st.text_input("YOUTUBE_API_KEY", value="", type="password")
             if st.button("Save Settings"):
                 save_env(gemini_key, youtube_key)
                 
@@ -100,12 +100,7 @@ with tab1:
             crawler_sort = st.selectbox("Sort By", options=["relevance", "viewCount", "engagement"], index=["relevance", "viewCount", "engagement"].index(config.get("Crawler", "sort_by", fallback="relevance")))
             crawler_max = st.slider("Videos to Analyze", min_value=1, max_value=50, value=min(config.getint("Crawler", "max_results", fallback=10), 50))
             
-            extract_all_comments = st.checkbox("Extract All Comments (Overrides limit)", value=config.getint("Crawler", "max_comments_per_video", fallback=100) == -1)
-            
-            if not extract_all_comments:
-                crawler_max_comments = st.slider("Max Comments per Video", min_value=10, max_value=1000, value=config.getint("Crawler", "max_comments_per_video", fallback=100), step=10)
-            else:
-                crawler_max_comments = -1
+            crawler_max_comments = st.slider("Max Comments per Video", min_value=10, max_value=50, value=min(config.getint("Crawler", "max_comments_per_video", fallback=50), 50), step=10)
                 
             crawler_region = st.text_input("Region Code (Optional)", value=config.get("Crawler", "region_code", fallback="US"))
             crawler_type = st.selectbox("Video Type", options=["both", "videos", "shorts"], index=["both", "videos", "shorts"].index(config.get("Crawler", "video_type", fallback="both")))

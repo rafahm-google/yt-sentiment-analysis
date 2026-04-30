@@ -142,6 +142,44 @@ def run_slide_generation(config_path="config.ini"):
     try:
         slides_list = json.loads(slides_json)
         print("SUCCESS: Conteúdo dos slides gerado em JSON.", flush=True)
+        
+        # Validation Layer for JSON Content
+        print("\n--- Validando Conteúdo dos Slides com Gemini Pro ---", flush=True)
+        validation_prompt = f"""
+        Você é um Analista de Qualidade. Compare o conteúdo dos slides gerados (em JSON) com o relatório de origem.
+        
+        Regras de Validação:
+        1. Todas as informações nos slides devem estar presentes ou ser diretamente derivadas do relatório (sem alucinações).
+        2. O conteúdo deve ser relevante para o tema '{brand_name}'.
+        3. O idioma deve ser {output_language}.
+        4. O texto deve fazer sentido e estar gramaticalmente correto.
+        
+        JSON dos Slides:
+        {slides_json}
+        
+        Relatório de Origem:
+        {report_content[:5000]}
+        
+        Se o JSON estiver correto e alinhado, retorne APENAS a palavra 'VALID'.
+        Se houver erros ou desalinhamentos, retorne o JSON CORRIGIDO completo, mantendo a mesma estrutura.
+        """
+        
+        validation_result = call_gemini(validation_prompt, 'gemini-3.1-pro-preview')
+        
+        if validation_result and 'VALID' not in validation_result:
+            print("Avisando: Ajustes sugeridos na validação. Atualizando conteúdo dos slides.", flush=True)
+            try:
+                # Try to parse the corrected JSON
+                start_idx = validation_result.find('[')
+                end_idx = validation_result.rfind(']') + 1
+                if start_idx != -1 and end_idx != 0:
+                    corrected_json = validation_result[start_idx:end_idx]
+                    slides_list = json.loads(corrected_json)
+                    slides_json = corrected_json # Update the string as well for saving
+                    print("SUCCESS: Slides corrigidos aplicados.", flush=True)
+            except Exception as e:
+                print(f"Erro ao processar JSON corrigido: {e}. Mantendo versão original.", flush=True)
+                
     except Exception as e:
         print(f"Error parsing JSON from Gemini: {e}", flush=True)
         print(slides_json)
@@ -195,6 +233,44 @@ def run_slide_generation(config_path="config.ini"):
         
         output_path = os.path.join(images_dir, f"slide_{slide_num}_full.png")
         generate_image(image_prompt, output_path)
+        
+        # Image Validation Layer
+        print(f"Validando imagem do Slide {slide_num}...", flush=True)
+        
+        if os.path.exists(output_path):
+            try:
+                val_client = genai.Client()
+                img = Image.open(output_path)
+                
+                val_prompt = f"""
+                Você é um Revisor de Design. Verifique se a imagem gerada para o slide corresponde ao conteúdo esperado.
+                
+                Conteúdo Esperado:
+                Título: {headline}
+                Texto: {bullets_text}
+                
+                Verifique:
+                1. O texto na imagem está legível e correto?
+                2. A imagem é relevante para o conteúdo?
+                
+                Se a imagem estiver aceitável e o texto legível, retorne APENAS a palavra 'VALID'.
+                Se houver problemas graves (texto ilegível, conteúdo totalmente errado), retorne 'INVALID' e descreva brevemente o erro.
+                """
+                
+                val_response = val_client.models.generate_content(
+                    model='gemini-3-flash-preview',
+                    contents=[img, val_prompt]
+                )
+                
+                print(f"Resultado da validação do Slide {slide_num}: {val_response.text}", flush=True)
+                
+                if 'INVALID' in val_response.text:
+                    print(f"Aviso: Imagem do Slide {slide_num} considerada inválida. Tentando gerar novamente...", flush=True)
+                    # Retry once
+                    generate_image(image_prompt, output_path)
+                    
+            except Exception as e:
+                print(f"Erro ao validar imagem do Slide {slide_num}: {e}", flush=True)
         
     # Use 3 workers to avoid overwhelming image rate limits
     with ThreadPoolExecutor(max_workers=3) as executor:
