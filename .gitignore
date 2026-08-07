@@ -24,3 +24,11 @@ outputs/
 .vscode/
 .idea/
 node_modules
+
+# Legacy & Scratch
+legacy/
+scratch/
+public/
+run_perfume_crawls.py
+config_*.ini
+!config_eeat.ini
