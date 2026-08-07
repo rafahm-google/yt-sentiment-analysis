@@ -26,6 +26,8 @@ from tqdm import tqdm
 from datetime import datetime
 import requests
 import json
+import hashlib
+import time
 
 class YouTubeBrandCrawler:
     """
@@ -47,12 +49,13 @@ class YouTubeBrandCrawler:
         self.youtube_api = build("youtube", "v3", developerKey=self.youtube_api_key)
 
     def _load_environment_variables(self, env_path):
-        """Loads API keys from a .env file."""
+        """Loads API keys from environment or .env file."""
         load_dotenv(dotenv_path=env_path)
-        self.youtube_api_key = os.getenv("YOUTUBE_API_KEY")
+        self.youtube_api_key = os.getenv("YOUTUBE_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not self.youtube_api_key:
-            raise ValueError("YouTube API key must be set in the .env file.")
-        print("SUCCESS: Environment variables loaded.")
+            print("Warning: Neither YOUTUBE_API_KEY nor GEMINI_API_KEY found in env.")
+        else:
+            print("SUCCESS: Environment variables loaded.")
 
     def _load_configuration(self, config_path):
         """Loads settings from the [Crawler] section of config.ini."""
@@ -62,9 +65,11 @@ class YouTubeBrandCrawler:
         config = configparser.ConfigParser()
         config.read(config_path)
         
-        self.search_terms = config.get('Crawler', 'search_terms')
-        self.search_modifiers = [mod.strip() for mod in config.get('Crawler', 'search_modifiers').split(',') if mod.strip()]
-        self.exclude_keywords = [key.strip().lower() for key in config.get('Crawler', 'exclude_keywords').split(',') if key.strip()]
+        self.search_terms = config.get('Crawler', 'search_terms', fallback='')
+        search_queries_str = config.get('Crawler', 'search_queries', fallback='')
+        self.search_queries = [q.strip() for q in search_queries_str.split(';') if q.strip()]
+        self.search_modifiers = [mod.strip() for mod in config.get('Crawler', 'search_modifiers', fallback='').split(',') if mod.strip()]
+        self.exclude_keywords = [key.strip().lower() for key in config.get('Crawler', 'exclude_keywords', fallback='').split(',') if key.strip()]
         
         # New filters
         self.video_type = config.get('Crawler', 'video_type', fallback='both').lower()
@@ -98,7 +103,8 @@ class YouTubeBrandCrawler:
 
         # --- Brand-Specific Output Path (BUG FIX) ---
         safe_brand_name = re.sub(r'\W+', '', self.search_terms.replace(' ', '_'))
-        self.output_dir = os.path.join('outputs', safe_brand_name)
+        run_id = config.get('General', 'run_id', fallback=safe_brand_name)
+        self.output_dir = os.path.join('outputs', run_id)
         self.output_path = os.path.join(self.output_dir, f"{safe_brand_name}_discovered_videos.csv")
         os.makedirs(self.output_dir, exist_ok=True)
         
@@ -113,13 +119,16 @@ class YouTubeBrandCrawler:
         """Executes the full crawling and filtering pipeline."""
         print("\n▶️  Starting video search on YouTube...")
         
-        # --- API Efficiency Improvement ---
-        # Combine all search modifiers into a single query for efficiency.
-        # Example: "Brand" (review | analysis | unboxing)
-        combined_modifiers = " | ".join(self.search_modifiers)
-        query = f'"{self.search_terms}" ({combined_modifiers})'
-        
-        print(f"Executing combined search query: '{query}'")
+        if hasattr(self, 'search_queries') and self.search_queries:
+            active_queries = self.search_queries
+            print(f"Executing {len(active_queries)} AI-generated search queries: {active_queries}")
+        else:
+            combined_modifiers = " | ".join(self.search_modifiers)
+            if combined_modifiers:
+                active_queries = [f'"{self.search_terms}" ({combined_modifiers})']
+            else:
+                active_queries = [self.search_terms]
+            print(f"Executing search query: '{active_queries[0]}'")
         
         target_channel_ids = []
         if self.include_channels:
@@ -141,11 +150,11 @@ class YouTubeBrandCrawler:
                 return
 
         video_ids = set()
-        # Prepare base search arguments
+        # Prepare base search arguments. maxResults per page is capped at 50 by YouTube API.
         search_kwargs_base = {
             'part': "id",
             'type': "video",
-            'maxResults': 50,
+            'maxResults': min(max(self.max_results * 2, 10), 50),
         }
         
         if self.region_code:
@@ -165,7 +174,14 @@ class YouTubeBrandCrawler:
         def fetch_pages(search_q, channel_id=None):
             next_page_token = None
             v_ids = set()
-            for _ in range(2): # Fetch up to 2 pages per search (User reduced from 3)
+            # Limit pages to save quota, but allow more for larger requests
+            if self.max_results <= 50:
+                max_pages = 1
+            else:
+                # Allow more pages to account for filtering (e.g. up to 3 pages for 100 results)
+                target_raw = (self.max_results * 3) // 2
+                max_pages = min((target_raw + 49) // 50, 4)
+            for _ in range(max_pages):
                 try:
                     kwargs = search_kwargs_base.copy()
                     kwargs["q"] = search_q
@@ -177,35 +193,77 @@ class YouTubeBrandCrawler:
                     search_response = self.youtube_api.search().list(**kwargs).execute()
                     
                     for item in search_response.get("items", []):
-                        v_ids.add(item["id"]["videoId"])
+                        if "videoId" in item.get("id", {}):
+                            v_ids.add(item["id"]["videoId"])
                     
                     next_page_token = search_response.get('nextPageToken')
                     if not next_page_token:
                         break # Exit if there are no more pages
                 except HttpError as e:
                     print(f"An HTTP error {e.resp.status} occurred:\n{e.content}")
-                    break
+                    raise e
             return v_ids
 
-        cache_file_path = os.path.join(self.output_dir, "search_cache.json")
+        # --- Global Query Cache Implementation (Strategy A) ---
+        key_dict = {
+            "terms": self.search_terms.lower(),
+            "mods": sorted([m.lower() for m in self.search_modifiers]),
+            "region": self.region_code.lower() if self.region_code else "",
+            "type": self.video_type.lower() if self.video_type else "",
+            "published_after": self.published_after if self.published_after else ""
+        }
+        query_hash = hashlib.md5(json.dumps(key_dict, sort_keys=True).encode('utf-8')).hexdigest()
         
-        if os.path.exists(cache_file_path):
-            print(f"\nFound cached search results in '{cache_file_path}'. Loading...")
-            with open(cache_file_path, 'r', encoding='utf-8') as f:
-                video_ids = set(json.load(f))
-        else:
-            if target_channel_ids:
-                print(f"\nTargeting specific channels for videos...")
-                for c_id in target_channel_ids:
-                    video_ids.update(fetch_pages(query, c_id))
+        global_cache_dir = os.path.join(self.project_root, 'outputs', 'cache', 'youtube_queries')
+        os.makedirs(global_cache_dir, exist_ok=True)
+        global_cache_path = os.path.join(global_cache_dir, f"{query_hash}.json")
+        
+        cache_loaded = False
+        # Check if global query cache exists and is under 24 hours old (86400 seconds)
+        if os.path.exists(global_cache_path):
+            file_age = time.time() - os.path.getmtime(global_cache_path)
+            if file_age < 86400:
+                try:
+                    print(f"\n[CACHE HIT] Found global shared query cache at '{os.path.basename(global_cache_path)}' ({int(file_age/3600)}h old). Loading...")
+                    with open(global_cache_path, 'r', encoding='utf-8') as f:
+                        video_ids = set(json.load(f))
+                        cache_loaded = True
+                except Exception as e:
+                    print(f"Error loading global query cache: {e}. Falling back to fresh search.")
             else:
-                print("\nSearching globally for videos...")
-                video_ids.update(fetch_pages(query))
+                print(f"\n[CACHE EXPIRED] Global shared query cache is {int(file_age/3600)}h old. Fetching fresh results...")
+
+        # If not loaded from global cache, run search
+        if not cache_loaded:
+            cache_file_path = os.path.join(self.output_dir, "search_cache.json")
+            
+            if os.path.exists(cache_file_path):
+                print(f"\nFound cached search results in '{cache_file_path}'. Loading...")
+                with open(cache_file_path, 'r', encoding='utf-8') as f:
+                    video_ids = set(json.load(f))
+            else:
+                if target_channel_ids:
+                    print(f"\nTargeting specific channels for videos...")
+                    for q in active_queries:
+                        for c_id in target_channel_ids:
+                            video_ids.update(fetch_pages(q, c_id))
+                else:
+                    print("\nSearching globally for videos...")
+                    for q in active_queries:
+                        video_ids.update(fetch_pages(q))
+                    
+                # Save to local session cache
+                with open(cache_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(list(video_ids), f)
+                print(f"Saved search results to local cache: '{cache_file_path}'")
                 
-            # Save to cache
-            with open(cache_file_path, 'w', encoding='utf-8') as f:
-                json.dump(list(video_ids), f)
-            print(f"Saved search results to cache: '{cache_file_path}'")
+                # Save to global shared cache
+                try:
+                    with open(global_cache_path, 'w', encoding='utf-8') as f:
+                        json.dump(list(video_ids), f)
+                    print(f"Saved search results to global shared cache: '{os.path.basename(global_cache_path)}'")
+                except Exception as e:
+                    print(f"Error saving to global query cache: {e}")
 
         if not video_ids:
             print("No videos found matching the search criteria. Exiting.")
@@ -264,6 +322,7 @@ class YouTubeBrandCrawler:
             # For robustness, we'll assume it's NOT a short if we can't verify.
             return False
 
+
     def _process_and_filter_videos(self, video_details):
         """Processes the raw API response, filters it, and returns a DataFrame."""
         processed_videos = []
@@ -281,6 +340,11 @@ class YouTubeBrandCrawler:
             channel_title = video["snippet"]["channelTitle"]
             published_at = video["snippet"]["publishedAt"]
             
+            # Filter by date (required when results are loaded from cache)
+            if self.published_after:
+                if pd.to_datetime(published_at) < pd.to_datetime(self.published_after):
+                    continue
+            
             # 1. Filter by excluded keywords in title
             if any(keyword in title.lower() for keyword in self.exclude_keywords):
                 continue
@@ -295,6 +359,7 @@ class YouTubeBrandCrawler:
             # 2. Filter by minimum view count
             if view_count < self.min_view_count:
                 continue
+
 
             # 3. Filter by video type (Shorts vs Videos) - Precise Check
             if self.video_type != 'both':

@@ -8,8 +8,8 @@ from google.genai import types
 from dotenv import load_dotenv
 from PIL import Image
 
-def call_gemini(prompt, model_name, config=None):
-    """Calls the Gemini API with retry logic for 503 errors."""
+def call_gemini(prompt, model_name, fallback_model_name=None, config=None):
+    """Calls the Gemini API with retry logic for 503 errors and optional fallback."""
     load_dotenv()
     client = genai.Client()
     
@@ -24,34 +24,55 @@ def call_gemini(prompt, model_name, config=None):
             return response.text
         except Exception as e:
             if "503" in str(e) or "UNAVAILABLE" in str(e):
-                print(f"Model overloaded (503). Waiting 5 seconds to retry...", flush=True)
+                print(f"Model {model_name} overloaded (503). Waiting 5 seconds to retry...", flush=True)
                 time.sleep(5)
             else:
                 print(f"Error calling Gemini API ({model_name}): {e}", flush=True)
-                return None
-    print(f"Failed after 3 attempts with {model_name}.", flush=True)
+                break
+                
+    if fallback_model_name:
+        print(f"Failed with primary model {model_name}. Falling back to {fallback_model_name}...", flush=True)
+        try:
+            response = client.models.generate_content(
+                model=fallback_model_name,
+                contents=prompt,
+                config=config
+            )
+            print(f"SUCCESS: Generated with fallback model {fallback_model_name}.", flush=True)
+            return response.text
+        except Exception as e_fb:
+            print(f"Error calling fallback Gemini API ({fallback_model_name}): {e_fb}", flush=True)
+            
+    print(f"Failed to get response.", flush=True)
     return None
 
 def generate_image(prompt, output_path):
-    """Calls Gemini Image API (Nano Banana) to generate an image."""
+    """Calls Gemini Image API (Nano Banana) to generate an image with retry."""
     load_dotenv()
     client = genai.Client()
     
-    try:
-        response = client.models.generate_content(
-            model="gemini-3.1-flash-image-preview",
-            contents=[prompt],
-        )
-        
-        for part in response.parts:
-            if part.inline_data is not None:
-                image = part.as_image()
-                image.save(output_path)
-                return True
-        return False
-    except Exception as e:
-        print(f"Error generating image: {e}", flush=True)
-        return False
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.1-flash-image-preview",
+                contents=[prompt],
+            )
+            
+            for part in response.parts:
+                if part.inline_data is not None:
+                    image = part.as_image()
+                    image.save(output_path)
+                    return True
+            return False
+        except Exception as e:
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                print(f"Image model overloaded (503). Waiting 5 seconds to retry...", flush=True)
+                time.sleep(5)
+            else:
+                print(f"Error generating image: {e}", flush=True)
+                return False
+    print("Failed to generate image after 3 attempts.", flush=True)
+    return False
 
 def run_slide_generation(config_path="config.ini"):
     """Full workflow to generate slides content as JSON, images and HTML viewer."""
@@ -61,11 +82,17 @@ def run_slide_generation(config_path="config.ini"):
     config.read(config_path)
     brand_name = config.get('Crawler', 'search_terms')
     safe_brand_name = re.sub(r'\W+', '', brand_name.replace(' ', '_'))
+    run_id = config.get('General', 'run_id', fallback=safe_brand_name)
     additional_context = config.get('Analysis', 'additional_context', fallback='')
     output_language = config.get('Analysis', 'output_language', fallback='Portuguese')
     
-    report_file = os.path.join("outputs", safe_brand_name, f"{safe_brand_name}_strategic_report.html")
-    output_dir = os.path.join("outputs", safe_brand_name, "presentation_structured")
+    pro_model_name = config.get('Analysis', 'pro_model_name', fallback='gemini-3.6-flash')
+    flash_model_name = config.get('Analysis', 'flash_model_name', fallback='gemini-3.6-flash')
+    fallback_model_name = config.get('Analysis', 'fallback_model_name', fallback='gemini-3.1-pro-preview')
+    
+    report_format = config.get('Analysis', 'report_format', fallback='html')
+    report_file = os.path.join("outputs", run_id, f"{safe_brand_name}_strategic_report.{report_format}")
+    output_dir = os.path.join("outputs", run_id, "presentation_structured")
     images_dir = os.path.join(output_dir, "images_full")
     os.makedirs(images_dir, exist_ok=True)
     
@@ -93,7 +120,7 @@ def run_slide_generation(config_path="config.ini"):
     """
     
     print("\n--- Gerando Template de Design ---", flush=True)
-    design_template = call_gemini(designer_prompt, 'gemini-3-flash-preview') # Using Flash to avoid 503s
+    design_template = call_gemini(designer_prompt, flash_model_name, fallback_model_name) # Using Flash to avoid 503s
     if not design_template:
         return
     print("SUCCESS: Template de Design gerado.", flush=True)
@@ -135,7 +162,7 @@ def run_slide_generation(config_path="config.ini"):
         response_mime_type="application/json",
     )
     
-    slides_json = call_gemini(prompt_step2, 'gemini-3-flash-preview', config=json_config)
+    slides_json = call_gemini(prompt_step2, flash_model_name, fallback_model_name, config=json_config)
     if not slides_json:
         return
         
@@ -164,7 +191,7 @@ def run_slide_generation(config_path="config.ini"):
         Se houver erros ou desalinhamentos, retorne o JSON CORRIGIDO completo, mantendo a mesma estrutura.
         """
         
-        validation_result = call_gemini(validation_prompt, 'gemini-3.1-pro-preview')
+        validation_result = call_gemini(validation_prompt, pro_model_name, fallback_model_name)
         
         if validation_result and 'VALID' not in validation_result:
             print("Avisando: Ajustes sugeridos na validação. Atualizando conteúdo dos slides.", flush=True)
@@ -213,6 +240,8 @@ def run_slide_generation(config_path="config.ini"):
         O prompt deve descrever o slide inteiro como uma imagem completa, incluindo o título, subtítulo e bullets, seguindo o estilo do template.
         Instrua o gerador de imagens a renderizar os textos claramente no idioma: {output_language}.
         
+        CRITICAL INSTRUCTION: Do NOT render color names (e.g., 'Ouro Envelhecido', 'Azul Profundo'), color hex codes (e.g., '#B8860B', '#051C48'), or font names (e.g., 'Inter') as text on the image. Use them only as style instructions for colors and typography. The only text on the image should be the Title, Subtitle, and Bullets.
+        
         Design System (Template):
         {design_template}
         
@@ -224,7 +253,7 @@ def run_slide_generation(config_path="config.ini"):
         Retorne APENAS o texto do prompt.
         """
         
-        image_prompt = call_gemini(prompt_generator, 'gemini-3-flash-preview')
+        image_prompt = call_gemini(prompt_generator, flash_model_name, fallback_model_name)
         if not image_prompt:
             print(f"Falha ao gerar prompt para o Slide {slide_num}", flush=True)
             return
@@ -258,7 +287,7 @@ def run_slide_generation(config_path="config.ini"):
                 """
                 
                 val_response = val_client.models.generate_content(
-                    model='gemini-3-flash-preview',
+                    model=flash_model_name,
                     contents=[img, val_prompt]
                 )
                 
@@ -280,7 +309,7 @@ def run_slide_generation(config_path="config.ini"):
         
     # STEP 4: Create HTML Viewer
     print("\n--- Criando Visualizador HTML ---", flush=True)
-    output_html = os.path.join("outputs", safe_brand_name, f"{safe_brand_name}_deck.html")
+    output_html = os.path.join("outputs", run_id, f"{safe_brand_name}_deck.html")
     
     img_files = [f for f in os.listdir(images_dir) if f.endswith('.png')]
     img_files.sort(key=lambda x: int(re.search(r'slide_(\d+)', x).group(1)) if re.search(r'slide_(\d+)', x) else 0)
@@ -352,9 +381,9 @@ def run_slide_generation(config_path="config.ini"):
     
     # STEP 5: Create PDF
     print("\n--- Criando PDF da Apresentação ---", flush=True)
-    output_pdf = os.path.join("outputs", safe_brand_name, f"{safe_brand_name}_presentation.pdf")
+    output_pdf = os.path.join("outputs", run_id, f"{safe_brand_name}_presentation.pdf")
     
-    images = [Image.open(os.path.join(images_dir, f)) for f in img_files]
+    images = [Image.open(os.path.join(images_dir, f)) for f in img_files if f.endswith('.png')]
     rgb_images = []
     for img in images:
         if img.mode == 'RGBA':

@@ -1,7 +1,7 @@
 # Instruções para Uso da API Gemini
 
 - Os modelos mais atuais e que devem ser usados SEMPRE são:
-  - Modelo Pro: `gemini-3.1-pro-preview`
-  - Modelo Flash: `gemini-3-flash-preview`
-- Não utilize versões anteriores como fallback (como 2.5-pro) a menos que explicitamente orientado pelo usuário.
-- Em caso de erro 503 (sobrecarga), implemente uma estratégia de tentativa após uma breve espera.
+  - Modelo Principal: `gemini-3.6-flash`
+  - Modelo de Fallback: `gemini-3.1-pro-preview`
+- Em caso de erro 503 (sobrecarga) com o Modelo Principal, implemente uma estratégia de tentativa após uma breve espera. Se continuar falhando, utilize o Modelo de Fallback como alternativa.
+

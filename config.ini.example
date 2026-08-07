@@ -1,10 +1,10 @@
 [Crawler]
 # --- Configuration for the YouTube Brand Crawler ---
-search_terms = copa do mundo
-search_modifiers = futebol
+search_terms = 
+search_modifiers = 
 # Optional: The 2-letter ISO country code (e.g., BR, US) to restrict search results to that region.
 region_code = BR
-exclude_keywords = EUA, Americano, kings, Kings, League, league, jogo completo, melhores momentos
+exclude_keywords = 
 # Options: videos, shorts, both
 video_type = both
 # Filter videos published after a specific date (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ). Leave empty for no date filter.
@@ -13,10 +13,11 @@ published_after =
 include_channels = 
 # Optional: Comma-separated list of channel names (case-insensitive) to filter out of the results.
 exclude_channels = 
-min_view_count = 100000
+min_view_count = 10000
 # Options: relevance, viewCount, engagement, date
 sort_by = relevance
-max_results = 100
+max_results = 10
+max_comments_per_video = 10
 
 [AudioExtractor]
 # --- Configuration for the Audio Extractor ---
@@ -26,10 +27,13 @@ audio_folder_name = audio
 # --- Configuration for the Gemini-Powered Analysis ---
 
 # Model for the final, high-level synthesis.
-pro_model_name = gemini-3.1-pro-preview
+pro_model_name = gemini-3.6-flash
 
 # Lighter model for summarizing individual batches.
-flash_model_name = gemini-3-flash-preview
+flash_model_name = gemini-3.6-flash
+
+# Fallback model in case primary models fail (e.g., 503 error).
+fallback_model_name = gemini-3.1-pro-preview
 
 # Path to the prompt for the final report synthesis (Gemini Pro).
 pro_prompt_template_path = templates/prompts/topic_analysis.txt
@@ -45,6 +49,7 @@ cache_dir = outputs/cache
 
 # The format for the final report. Options: html, markdown
 report_format = html
+
 
 # Path to the specific comments CSV file to analyze.
 # This is now read automatically based on the brand name.

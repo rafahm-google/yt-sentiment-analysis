@@ -11,3 +11,4 @@ tabulate
 google-genai
 notebooklm-py[browser]
 python-pptx
+Pillow

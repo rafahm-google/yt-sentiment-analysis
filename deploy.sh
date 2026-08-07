@@ -7,14 +7,24 @@ GCLOUD_PATH="gcloud"
 IMAGE_URL="$REGION-docker.pkg.dev/$PROJECT_ID/cr-images/$SERVICE_NAME"
 
 # Load environment variables from .env if it exists
-set -a
-[ -f .env ] && . .env
-set +a
+if [ -f .env ]; then
+  eval $(grep -v '^#' .env | sed 's/=/="/;s/$/"/')
+fi
 
-# Fallback GEMINI_API_KEY to YOUTUBE_API_KEY if not set
+# Strip quotes if any remain
+YOUTUBE_API_KEY=$(echo "$YOUTUBE_API_KEY" | tr -d "'\"")
+GEMINI_API_KEY=$(echo "$GEMINI_API_KEY" | tr -d "'\"")
+
+# Fallback GEMINI_API_KEY to YOUTUBE_API_KEY only if GEMINI_API_KEY is unset
 if [ -z "$GEMINI_API_KEY" ]; then
   export GEMINI_API_KEY="$YOUTUBE_API_KEY"
 fi
+if [ -z "$YOUTUBE_API_KEY" ]; then
+  export YOUTUBE_API_KEY="$GEMINI_API_KEY"
+fi
+
+export YOUTUBE_API_KEY
+export GEMINI_API_KEY
 
 echo "Setting project to $PROJECT_ID..."
 $GCLOUD_PATH config set project $PROJECT_ID
@@ -37,4 +47,4 @@ $GCLOUD_PATH run deploy $SERVICE_NAME \
   --cpu 4 \
   --timeout 3600 \
   --memory 10Gi \
-  --set-env-vars YOUTUBE_API_KEY="$YOUTUBE_API_KEY",GEMINI_API_KEY="$GEMINI_API_KEY"
+  --set-env-vars YOUTUBE_API_KEY="$YOUTUBE_API_KEY",GEMINI_API_KEY="$GEMINI_API_KEY",DRIVE_FOLDER_ID="1MsXuPKrR6MM6o02NXt-yPE-Hwj7caiCT",DRIVE_RESOURCE_KEY="0-X26e-T0YzerdpL_8vA-uRg"

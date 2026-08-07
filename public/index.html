@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>YouTube Sentiment Analysis</title>
+    <style>
+      body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+      input, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+      #status { margin-top: 20px; padding: 10px; border: 1px solid #ccc; display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>YouTube Sentiment Analysis</h1>
+    <p>Enter a brand or topic to analyze sentiment from YouTube videos.</p>
+    
+    <form id="analysisForm">
+      <input type="text" id="brandName" placeholder="Brand Name (e.g. Volkswagen)" required>
+      <button type="submit">Start Analysis</button>
+    </form>
+
+    <div id="status"></div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+      import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js";
+
+      const firebaseConfig = {
+        apiKey: "YOUR_FIREBASE_API_KEY",
+        authDomain: "rafahm-sandbox.firebaseapp.com",
+        projectId: "rafahm-sandbox",
+        storageBucket: "rafahm-sandbox.firebasestorage.app",
+        messagingSenderId: "622680019729",
+        appId: "1:622680019729:web:f3132e7a458142a07672b0",
+        measurementId: "G-HNDQ0MHB93"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const functions = getFunctions(app);
+      const analyzeBrand = httpsCallable(functions, 'analyze_youtube_brand');
+
+      const form = document.getElementById('analysisForm');
+      const statusDiv = document.getElementById('status');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const brandName = document.getElementById('brandName').value;
+        
+        statusDiv.style.display = 'block';
+        statusDiv.innerText = 'Starting analysis for ' + brandName + '...';
+
+        try {
+          const result = await analyzeBrand({ search_terms: brandName });
+          statusDiv.innerText = result.data.message;
+        } catch (error) {
+          console.error(error);
+          statusDiv.innerText = 'Error: ' + error.message;
+        }
+      });
+    </script>
+  </body>
+</html>

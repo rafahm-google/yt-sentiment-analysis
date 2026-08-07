@@ -1,0 +1,28 @@
+# Virtual environment directories
+venv/
+.venv/
+env/
+ENV/
+
+# Python bytecode and cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Git VCS
+.git/
+.gitignore
+
+# Local data and pipeline outputs
+outputs/
+legacy/
+
+# Local secrets and development environment files
+.env
+.env.example
+.gcloudignore
+
+# IDE settings
+.idea/
+.vscode/

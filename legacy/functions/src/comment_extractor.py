@@ -15,14 +15,12 @@ from tqdm import tqdm
 import argparse
 import re
 import configparser
-import json
-import time
 
 class YouTubeCommentExtractor:
     """
     A class to extract comments from YouTube videos.
     """
-    def __init__(self, config_path, env_path=None):
+    def __init__(self, config_dict=None, config_path=None, env_path=None):
         """Initializes the extractor by loading configuration and API keys."""
         print("Initializing YouTube Comment Extractor...")
         self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,18 +29,33 @@ class YouTubeCommentExtractor:
             env_path = os.path.join(self.project_root, '.env')
             
         self._load_environment_variables(env_path)
-        self._load_configuration(config_path)
+        
+        if config_dict:
+            self._load_configuration_from_dict(config_dict)
+        else:
+            if config_path is None:
+                config_path = os.path.join(self.project_root, 'config.ini')
+            self._load_configuration(config_path)
+            
         self.youtube_api = build("youtube", "v3", developerKey=self.youtube_api_key)
         print("SUCCESS: YouTube API service built.")
 
     def _load_environment_variables(self, env_path):
-        """Loads API keys from environment or .env file."""
+        """Loads API keys from environment or a .env file."""
         load_dotenv(dotenv_path=env_path)
-        self.youtube_api_key = os.getenv("YOUTUBE_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.youtube_api_key = os.getenv("YOUTUBE_API_KEY")
         if not self.youtube_api_key:
-            print("Warning: Neither YOUTUBE_API_KEY nor GEMINI_API_KEY found in env.")
-        else:
-            print("SUCCESS: Environment variables loaded.")
+            raise ValueError("YOUTUBE_API_KEY must be set in the environment or .env file.")
+        print("SUCCESS: Environment variables loaded.")
+
+    def _load_configuration_from_dict(self, config):
+        """Loads settings from a dictionary."""
+        brand_name = config.get('search_terms')
+        safe_brand_name = re.sub(r'\W+', '', brand_name.replace(' ', '_'))
+        base_output_dir = config.get('base_output_dir', 'outputs')
+        self.input_csv_path = os.path.join(base_output_dir, safe_brand_name, f"{safe_brand_name}_discovered_videos.csv")
+        self.output_csv_path = os.path.join(base_output_dir, safe_brand_name, f"{safe_brand_name}_raw_comments.csv")
+        self.max_comments_per_video = int(config.get('max_comments_per_video', 50))
 
     def _load_configuration(self, config_path):
         """Loads settings from the config file."""
@@ -54,11 +67,10 @@ class YouTubeCommentExtractor:
         
         brand_name = config.get('Crawler', 'search_terms')
         safe_brand_name = re.sub(r'\W+', '', brand_name.replace(' ', '_'))
-        run_id = config.get('General', 'run_id', fallback=safe_brand_name)
         
-        self.input_csv_path = os.path.join(self.project_root, 'outputs', run_id, f"{safe_brand_name}_discovered_videos.csv")
-        self.output_csv_path = os.path.join(self.project_root, 'outputs', run_id, f"{safe_brand_name}_raw_comments.csv")
-        self.max_comments_per_video = config.getint('Crawler', 'max_comments_per_video', fallback=100)
+        self.input_csv_path = os.path.join(self.project_root, 'outputs', safe_brand_name, f"{safe_brand_name}_discovered_videos.csv")
+        self.output_csv_path = os.path.join(self.project_root, 'outputs', safe_brand_name, f"{safe_brand_name}_raw_comments.csv")
+        self.max_comments_per_video = config.getint('Crawler', 'max_results', fallback=100) # Reuse max_results for comments
 
     def extract_comments(self):
         """
@@ -80,44 +92,14 @@ class YouTubeCommentExtractor:
         all_comments = []
         print(f"Found {len(videos_df)} videos to process for comments.")
 
-        global_cache_dir = os.path.join(self.project_root, 'outputs', 'cache', 'youtube_comments')
-        os.makedirs(global_cache_dir, exist_ok=True)
-
         for index, row in tqdm(videos_df.iterrows(), total=videos_df.shape[0], desc="Extracting Comments"):
             video_id = row['video_id']
             video_title = row.get('title', 'Unknown Title')
             video_url = row.get('url', f"https://www.youtube.com/watch?v={video_id}")
             
-            cache_path = os.path.join(global_cache_dir, f"{video_id}.json")
-            comments_loaded = False
-            comments_for_video = []
-            
-            if os.path.exists(cache_path):
-                file_age = time.time() - os.path.getmtime(cache_path)
-                if file_age < 172800: # 48 Hours in seconds
-                    try:
-                        with open(cache_path, 'r', encoding='utf-8') as f:
-                            comments_for_video = json.load(f)
-                            comments_loaded = True
-                            # Sync title and URL in case they differ
-                            for c in comments_for_video:
-                                c['titulo_video'] = video_title
-                                c['url_video'] = video_url
-                    except Exception as e:
-                        print(f"\nError loading comment cache for video {video_id}: {e}. Fetching fresh.")
-                        
-            if not comments_loaded:
-                comments_for_video = self._fetch_comments_for_video(
-                    video_id, video_title, video_url, self.max_comments_per_video
-                )
-                # Save to cache
-                if comments_for_video:
-                    try:
-                        with open(cache_path, 'w', encoding='utf-8') as f:
-                            json.dump(comments_for_video, f)
-                    except Exception as e:
-                        print(f"\nError saving comment cache for video {video_id}: {e}")
-                        
+            comments_for_video = self._fetch_comments_for_video(
+                video_id, video_title, video_url, self.max_comments_per_video
+            )
             all_comments.extend(comments_for_video)
 
         if not all_comments:
@@ -162,11 +144,11 @@ class YouTubeCommentExtractor:
                         'publicado_em': comment['publishedAt'],
                     })
                     count += 1
-                    if max_comments != -1 and count >= max_comments:
+                    if count >= max_comments:
                         break
 
                 next_page_token = response.get('nextPageToken')
-                if not next_page_token or (max_comments != -1 and count >= max_comments):
+                if not next_page_token or count >= max_comments:
                     break
 
             except HttpError as e:
