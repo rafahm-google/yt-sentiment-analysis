@@ -1,0 +1,10 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '--no-cache', '-t', 'us-central1-docker.pkg.dev/rafahm-run-dev/cr-images/yt-sentiment-analysis:$BUILD_ID', '-t', 'us-central1-docker.pkg.dev/rafahm-run-dev/cr-images/yt-sentiment-analysis:latest', '.']
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'us-central1-docker.pkg.dev/rafahm-run-dev/cr-images/yt-sentiment-analysis:$BUILD_ID']
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'us-central1-docker.pkg.dev/rafahm-run-dev/cr-images/yt-sentiment-analysis:latest']
+images:
+- 'us-central1-docker.pkg.dev/rafahm-run-dev/cr-images/yt-sentiment-analysis:$BUILD_ID'
+- 'us-central1-docker.pkg.dev/rafahm-run-dev/cr-images/yt-sentiment-analysis:latest'
