@@ -394,7 +394,8 @@ with tab1:
                     briefing_val = st.session_state.crawler_search
                 temp_config.set("Crawler", "campaign_briefing", briefing_val)
             else:
-                temp_config.set("Crawler", "campaign_briefing", st.session_state.crawler_search)
+                briefing_val = st.session_state.additional_context.strip() if st.session_state.additional_context.strip() else st.session_state.crawler_search
+                temp_config.set("Crawler", "campaign_briefing", briefing_val)
             
             if st.session_state.selected_lang_ui == "Other":
                 temp_config.set("Analysis", "output_language", st.session_state.custom_lang_ui)
