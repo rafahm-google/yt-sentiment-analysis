@@ -170,10 +170,11 @@ class YouTubeBrandCrawler:
 
         video_ids = set()
         # Prepare base search arguments. maxResults per page is capped at 50 by YouTube API.
+        raw_limit = 50 if self.enable_semantic_filter else min(max(self.max_results * 2, 10), 50)
         search_kwargs_base = {
             'part': "id",
             'type': "video",
-            'maxResults': min(max(self.max_results * 2, 10), 50),
+            'maxResults': raw_limit,
         }
         
         if self.region_code:
@@ -193,11 +194,13 @@ class YouTubeBrandCrawler:
         def fetch_pages(search_q, channel_id=None):
             next_page_token = None
             v_ids = set()
-            # Limit pages to save quota, but allow more for larger requests
-            if self.max_results <= 50:
+            # Fetch deeper candidate pool when semantic filtering is enabled to guarantee sufficient relevant videos
+            if self.enable_semantic_filter:
+                target_raw = max(self.max_results * 3, 50)
+                max_pages = min((target_raw + 49) // 50, 3)
+            elif self.max_results <= 50:
                 max_pages = 1
             else:
-                # Allow more pages to account for filtering (e.g. up to 3 pages for 100 results)
                 target_raw = (self.max_results * 3) // 2
                 max_pages = min((target_raw + 49) // 50, 4)
             for _ in range(max_pages):

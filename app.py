@@ -37,39 +37,42 @@ config.read(CONFIG_PATH)
 def get_config_val(section, key, fallback=""):
     return config.get(section, key, fallback=fallback)
 
-# Initialize session state from config.ini if not already initialized
-if "config_initialized" not in st.session_state:
-    st.session_state.crawler_search = get_config_val("Crawler", "search_terms", "")
-    st.session_state.crawler_search_queries = get_config_val("Crawler", "search_queries", "")
-    st.session_state.crawler_mod = get_config_val("Crawler", "search_modifiers", "")
-    st.session_state.crawler_exclude = get_config_val("Crawler", "exclude_keywords", "")
-    st.session_state.crawler_min_view = int(get_config_val("Crawler", "min_view_count", "10000"))
-    st.session_state.crawler_sort = get_config_val("Crawler", "sort_by", "relevance")
-    st.session_state.crawler_max = min(max(int(get_config_val("Crawler", "max_results", "10")), 1), 100)
-    st.session_state.crawler_max_comments = min(max(int(get_config_val("Crawler", "max_comments_per_video", "10")), 10), 50)
-    st.session_state.crawler_region = get_config_val("Crawler", "region_code", "US")
-    st.session_state.crawler_type = get_config_val("Crawler", "video_type", "both")
-    st.session_state.crawler_include_ch = get_config_val("Crawler", "include_channels", "")
-    st.session_state.crawler_exclude_ch = get_config_val("Crawler", "exclude_channels", "")
-    st.session_state.crawler_published_after = get_config_val("Crawler", "published_after", "")
-    st.session_state.enable_semantic_filter = get_config_val("Crawler", "enable_semantic_filter", "true").lower() == "true"
-    st.session_state.relevance_threshold = int(get_config_val("Crawler", "relevance_threshold", "70"))
-    st.session_state.campaign_briefing = get_config_val("Crawler", "campaign_briefing", "")
-    st.session_state.additional_context = get_config_val("Analysis", "additional_context", "")
-    
-    lang_options_init = ["Portuguese", "English", "Spanish"]
-    current_lang_init = get_config_val("Analysis", "output_language", "Portuguese")
+# Initialize session state keys safely (robust against existing sessions)
+def init_session_key(key, default_val):
+    if key not in st.session_state:
+        st.session_state[key] = default_val
+
+init_session_key("crawler_search", get_config_val("Crawler", "search_terms", ""))
+init_session_key("crawler_search_queries", get_config_val("Crawler", "search_queries", ""))
+init_session_key("crawler_mod", get_config_val("Crawler", "search_modifiers", ""))
+init_session_key("crawler_exclude", get_config_val("Crawler", "exclude_keywords", ""))
+init_session_key("crawler_min_view", int(get_config_val("Crawler", "min_view_count", "10000")))
+init_session_key("crawler_sort", get_config_val("Crawler", "sort_by", "relevance"))
+init_session_key("crawler_max", min(max(int(get_config_val("Crawler", "max_results", "10")), 1), 100))
+init_session_key("crawler_max_comments", min(max(int(get_config_val("Crawler", "max_comments_per_video", "10")), 10), 50))
+init_session_key("crawler_region", get_config_val("Crawler", "region_code", "US"))
+init_session_key("crawler_type", get_config_val("Crawler", "video_type", "both"))
+init_session_key("crawler_include_ch", get_config_val("Crawler", "include_channels", ""))
+init_session_key("crawler_exclude_ch", get_config_val("Crawler", "exclude_channels", ""))
+init_session_key("crawler_published_after", get_config_val("Crawler", "published_after", ""))
+init_session_key("enable_semantic_filter", get_config_val("Crawler", "enable_semantic_filter", "true").lower() == "true")
+init_session_key("relevance_threshold", int(get_config_val("Crawler", "relevance_threshold", "70")))
+init_session_key("campaign_briefing", get_config_val("Crawler", "campaign_briefing", ""))
+init_session_key("additional_context", get_config_val("Analysis", "additional_context", ""))
+
+lang_options_init = ["Portuguese", "English", "Spanish"]
+current_lang_init = get_config_val("Analysis", "output_language", "Portuguese")
+if "selected_lang_ui" not in st.session_state:
     if current_lang_init in lang_options_init:
         st.session_state.selected_lang_ui = current_lang_init
         st.session_state.custom_lang_ui = ""
     else:
         st.session_state.selected_lang_ui = "Other"
         st.session_state.custom_lang_ui = current_lang_init
-        
-    st.session_state.session_runs = []
-    st.session_state.current_run_id = None
-    st.session_state.pipeline_running = False
-    st.session_state.config_initialized = True
+
+init_session_key("session_runs", [])
+init_session_key("current_run_id", None)
+init_session_key("pipeline_running", False)
 
 def save_env(gemini_key, youtube_key):
     if not os.path.exists(ENV_PATH):
@@ -272,8 +275,8 @@ with tab1:
     # Advanced Expander (Collapsible, hidden from non-tech users)
     with st.expander("⚙️ Advanced Tuning & Execution Options", expanded=False):
         st.markdown("### 🎯 AI Semantic Relevance Filter")
-        st.checkbox("Enable AI Semantic Relevance Filter", value=st.session_state.enable_semantic_filter, key="enable_semantic_filter", help="Use two-stage AI semantic filtering to eliminate off-topic videos before comment extraction.")
-        st.slider("Relevance Score Threshold (0-100)", min_value=50, max_value=95, value=st.session_state.relevance_threshold, step=5, key="relevance_threshold", help="Minimum relevance score (0-100) required to keep a video (default: 70).")
+        st.checkbox("Enable AI Semantic Relevance Filter", value=getattr(st.session_state, 'enable_semantic_filter', True), key="enable_semantic_filter", help="Use two-stage AI semantic filtering to eliminate off-topic videos before comment extraction.")
+        st.slider("Relevance Score Threshold (0-100)", min_value=50, max_value=95, value=getattr(st.session_state, 'relevance_threshold', 70), step=5, key="relevance_threshold", help="Minimum relevance score (0-100) required to keep a video (default: 70).")
         
         st.markdown("---")
         st.markdown("### Search Fine-Tuning")
