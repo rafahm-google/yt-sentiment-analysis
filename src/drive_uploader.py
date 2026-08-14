@@ -60,7 +60,8 @@ def verify_file_in_drive(file_name, folder_id, resource_key=None):
         kwargs = {
             'q': query,
             'fields': 'files(id, name)',
-            'supportsAllDrives': True
+            'supportsAllDrives': True,
+            'includeItemsFromAllDrives': True
         }
         
         request = service.files().list(**kwargs)
