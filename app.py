@@ -275,8 +275,16 @@ with tab1:
     # Advanced Expander (Collapsible, hidden from non-tech users)
     with st.expander("⚙️ Advanced Tuning & Execution Options", expanded=False):
         st.markdown("### 🎯 AI Semantic Relevance Filter")
-        st.checkbox("Enable AI Semantic Relevance Filter", key="enable_semantic_filter", help="Use two-stage AI semantic filtering to eliminate off-topic videos before comment extraction.")
-        st.slider("Relevance Score Threshold (0-100)", min_value=50, max_value=95, step=5, key="relevance_threshold", help="Minimum relevance score (0-100) required to keep a video (default: 70).")
+        st.info(
+            "💡 **Como funciona o Filtro Semântico por IA?**\n\n"
+            "Este motor utiliza o **Gemini 3.7 Flash** em 2 estágios para avaliar o alinhamento de cada vídeo do YouTube em relação ao seu briefing de campanha, eliminando automaticamente conteúdos irrelevantes (como canais automotivos com 'café' no nome, receitas de bolo ou músicas).\n\n"
+            "• **Valor Padrão Recomendado:** **70 / 100** (Equilíbrio ideal entre eliminação de ruído e volume de vídeos).\n"
+            "• **Se AUMENTAR a nota (ex: 85–95):** O filtro fica **ultrastrito**. Apenas vídeos altamente focados na sua marca/categoria serão aprovados (útil se você quer alta precisão).\n"
+            "• **Se DIMINUIR a nota (ex: 50–60):** O filtro fica **permissivo**. Aceita vídeos tangenciais ou que citam a categoria de forma secundária."
+        )
+        
+        st.checkbox("Enable AI Semantic Relevance Filter", key="enable_semantic_filter", help="Ativa a curadoria semântica por IA antes da extração dos comentários. Recomendado manter ATIVO para descartar ruídos.")
+        st.slider("Relevance Score Threshold (0-100)", min_value=50, max_value=95, step=5, key="relevance_threshold", help="Nota mínima de relevância (0-100) exigida para um vídeo entrar no relatório final (Padrão: 70).")
         
         st.markdown("---")
         st.markdown("### Search Fine-Tuning")
