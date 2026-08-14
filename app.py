@@ -450,8 +450,20 @@ with tab1:
                     stdout_acc.append(line)
                     # Parse for summary
                     if "STEP 1: CRAWLING VIDEOS" in line:
-                        status_text.text("Step 1/4: Discovering relevant YouTube videos...")
+                        status_text.text("Step 1/4: Discovering candidate YouTube videos...")
                         progress_bar.progress(10)
+                    elif "[STAGE 1]" in line:
+                        status_text.text("Step 1/4: Running heuristic pre-filtering on candidate videos...")
+                        progress_bar.progress(15)
+                    elif "[STAGE 2]" in line:
+                        status_text.text("Step 1/4: AI Semantic Relevance Filter - Evaluating candidates with Gemini AI...")
+                        progress_bar.progress(20)
+                    elif "Evaluating batch" in line:
+                        status_text.text("Step 1/4: AI Semantic Curation - Evaluating video relevance in parallel...")
+                        progress_bar.progress(25)
+                    elif "Stage 2 Complete" in line:
+                        status_text.text("Step 1/4: AI Curation complete! Selecting top-scoring videos...")
+                        progress_bar.progress(28)
                     elif "STEP 3: EXTRACTING COMMENTS" in line:
                         status_text.text("Step 2/4: Harvesting customer comments...")
                         progress_bar.progress(30)
