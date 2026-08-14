@@ -31,8 +31,6 @@ scratch/
 swarms/
 public/
 tests/
-Dockerfile
-.dockerignore
 run_perfume_crawls.py
 config_*.ini
 !config_eeat.ini
