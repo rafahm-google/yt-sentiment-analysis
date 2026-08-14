@@ -28,6 +28,7 @@ node_modules
 # Legacy & Scratch
 legacy/
 scratch/
+swarms/
 public/
 run_perfume_crawls.py
 config_*.ini

@@ -13,28 +13,36 @@ from typing import List, Optional
 class CampaignStrategySchema(BaseModel):
     primary_search_term: str = Field(description="1-3 word primary term representing the brand or topic")
     strategic_reasoning: str = Field(description="Detailed explanation of the search strategy and deep thinking")
-    search_queries: List[str] = Field(description="3 to 6 targeted YouTube search query strings")
-    search_modifiers: List[str] = Field(description="Search modifier keywords like review, unboxing")
-    exclude_keywords: List[str] = Field(description="Negative keywords to filter out unwanted noise")
+    search_queries: List[str] = Field(description="3 to 6 targeted YouTube search query strings with exact-quoted entities")
+    search_modifiers: List[str] = Field(description="Search modifier keywords like review, unboxing, compras")
+    exclude_keywords: List[str] = Field(description="Comprehensive negative keywords across culinary, infant formula, stock, repair, and spam zones")
     recommended_region: str = Field(default="BR", description="2-letter ISO region code")
     recommended_video_type: str = Field(default="both", description="videos, shorts, or both")
     recommended_sort_by: str = Field(default="relevance", description="relevance, viewCount, or date")
-    recommended_channels: List[str] = Field(default_factory=list, description="Optional channel names")
+    recommended_channels: List[str] = Field(default_factory=list, description="Optional high-signal channel names")
     additional_context_for_analysis: str = Field(description="Synthesized background context for downstream analysis")
+    campaign_objective_summary: str = Field(default="", description="Concise 2-sentence objective summary for semantic filtering")
+    model_config = {"extra": "ignore"}
 
 class BriefingPlanner:
     """
     Leverages Gemini deep thinking to translate high-level campaign briefings
     or broad research topics into optimized YouTube API search strategies.
     """
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, model_name=None, fallback_model_name=None):
         self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         if config_path is None:
             config_path = os.path.join(self.project_root, 'config.ini')
         
         self.config_path = config_path
+        self.custom_model_name = model_name
+        self.custom_fallback_model_name = fallback_model_name
         self._load_environment_variables()
         self._load_configuration()
+        if self.custom_model_name:
+            self.pro_model_name = self.custom_model_name
+        if self.custom_fallback_model_name:
+            self.fallback_model_name = self.custom_fallback_model_name
         self.client = genai.Client(api_key=self.google_api_key)
 
     def _load_environment_variables(self):
@@ -48,9 +56,9 @@ class BriefingPlanner:
         if os.path.exists(self.config_path):
             config.read(self.config_path)
             
-        self.pro_model_name = config.get('Analysis', 'pro_model_name', fallback='gemini-3.6-flash')
-        self.flash_model_name = config.get('Analysis', 'flash_model_name', fallback='gemini-3.6-flash')
-        self.fallback_model_name = config.get('Analysis', 'fallback_model_name', fallback='gemini-3.1-pro-preview')
+        self.pro_model_name = config.get('Analysis', 'briefing_model_name', fallback='gemini-3.7-flash')
+        self.flash_model_name = config.get('Analysis', 'flash_model_name', fallback='gemini-3.7-flash')
+        self.fallback_model_name = config.get('Analysis', 'fallback_model_name', fallback='gemini-3.6-flash')
         
         prompt_rel_path = config.get('Analysis', 'briefing_prompt_template_path', fallback='templates/prompts/briefing_planner.txt')
         self.prompt_path = os.path.join(self.project_root, prompt_rel_path)
@@ -79,6 +87,12 @@ Analyze the following Campaign Briefing and generate an optimized YouTube search
 Language: {{OUTPUT_LANGUAGE}}
 Region: {{REGION_CODE}}
 Additional Context: {{ADDITIONAL_CONTEXT}}
+
+## 4-STEP PROCESS:
+1. Entity Grounding: Discover official brand/storefront names.
+2. Exact-Match Quoted Queries: 3-6 queries enclosing core entities in quotes ('"[Entity]" idiom').
+3. 5-Zone Negative Taxonomy: Exclude culinary, infant formula, stock news, repairs, and marketplace spam.
+4. Campaign Objective Summary: 2-sentence objective summary for semantic filtering.
 """
 
         # Replace placeholders
@@ -173,7 +187,12 @@ Additional Context: {{ADDITIONAL_CONTEXT}}
                 else:
                     raise e
 
-        # Ensure default keys exist
+        # Ensure default keys exist and fallback campaign_objective_summary
+        additional_context = parsed.get("additional_context_for_analysis", "")
+        objective_summary = parsed.get("campaign_objective_summary", "").strip()
+        if not objective_summary:
+            objective_summary = additional_context
+
         strategy = {
             "primary_search_term": parsed.get("primary_search_term", ""),
             "strategic_reasoning": parsed.get("strategic_reasoning", ""),
@@ -184,13 +203,14 @@ Additional Context: {{ADDITIONAL_CONTEXT}}
             "recommended_video_type": parsed.get("recommended_video_type", "both"),
             "recommended_sort_by": parsed.get("recommended_sort_by", "relevance"),
             "recommended_channels": parsed.get("recommended_channels", []),
-            "additional_context_for_analysis": parsed.get("additional_context_for_analysis", "")
+            "additional_context_for_analysis": additional_context,
+            "campaign_objective_summary": objective_summary
         }
         return strategy
 
 if __name__ == "__main__":
     planner = BriefingPlanner()
-    test_briefing = "Queremos analisar o sentimento em relação a marcas de tênis sustentáveis e moda ética no Brasil."
+    test_briefing = "Analisar o canal D2C Empório Nestlé vs Marketplaces no Brasil."
     result = planner.plan_campaign(test_briefing)
     print("\n--- GENERATED STRATEGY ---")
     print(json.dumps(result, indent=2, ensure_ascii=False))

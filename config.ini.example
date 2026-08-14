@@ -18,6 +18,12 @@ min_view_count = 10000
 sort_by = relevance
 max_results = 10
 max_comments_per_video = 10
+# Enable AI Semantic Relevance Filtering (two-stage heuristic + LLM scoring)
+enable_semantic_filter = true
+# Minimum relevance score (0-100) for a video candidate to be kept
+relevance_threshold = 70
+# Campaign briefing or objective description used to score relevance
+campaign_briefing = 
 
 [AudioExtractor]
 # --- Configuration for the Audio Extractor ---
@@ -27,13 +33,13 @@ audio_folder_name = audio
 # --- Configuration for the Gemini-Powered Analysis ---
 
 # Model for the final, high-level synthesis.
-pro_model_name = gemini-3.6-flash
+pro_model_name = gemini-3.7-flash
 
 # Lighter model for summarizing individual batches.
-flash_model_name = gemini-3.6-flash
+flash_model_name = gemini-3.7-flash
 
 # Fallback model in case primary models fail (e.g., 503 error).
-fallback_model_name = gemini-3.1-pro-preview
+fallback_model_name = gemini-3.6-flash
 
 # Path to the prompt for the final report synthesis (Gemini Pro).
 pro_prompt_template_path = templates/prompts/topic_analysis.txt

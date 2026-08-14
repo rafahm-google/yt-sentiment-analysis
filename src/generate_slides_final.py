@@ -86,9 +86,9 @@ def run_slide_generation(config_path="config.ini"):
     additional_context = config.get('Analysis', 'additional_context', fallback='')
     output_language = config.get('Analysis', 'output_language', fallback='Portuguese')
     
-    pro_model_name = config.get('Analysis', 'pro_model_name', fallback='gemini-3.6-flash')
-    flash_model_name = config.get('Analysis', 'flash_model_name', fallback='gemini-3.6-flash')
-    fallback_model_name = config.get('Analysis', 'fallback_model_name', fallback='gemini-3.1-pro-preview')
+    pro_model_name = config.get('Analysis', 'pro_model_name', fallback='gemini-3.7-flash')
+    flash_model_name = config.get('Analysis', 'flash_model_name', fallback='gemini-3.7-flash')
+    fallback_model_name = config.get('Analysis', 'fallback_model_name', fallback='gemini-3.6-flash')
     
     report_format = config.get('Analysis', 'report_format', fallback='html')
     report_file = os.path.join("outputs", run_id, f"{safe_brand_name}_strategic_report.{report_format}")

@@ -52,6 +52,9 @@ if "config_initialized" not in st.session_state:
     st.session_state.crawler_include_ch = get_config_val("Crawler", "include_channels", "")
     st.session_state.crawler_exclude_ch = get_config_val("Crawler", "exclude_channels", "")
     st.session_state.crawler_published_after = get_config_val("Crawler", "published_after", "")
+    st.session_state.enable_semantic_filter = get_config_val("Crawler", "enable_semantic_filter", "true").lower() == "true"
+    st.session_state.relevance_threshold = int(get_config_val("Crawler", "relevance_threshold", "70"))
+    st.session_state.campaign_briefing = get_config_val("Crawler", "campaign_briefing", "")
     st.session_state.additional_context = get_config_val("Analysis", "additional_context", "")
     
     lang_options_init = ["Portuguese", "English", "Spanish"]
@@ -88,6 +91,7 @@ def save_config(params):
     
     # Crawler
     config.set("Crawler", "search_terms", params.get("search_terms", ""))
+    config.set("Crawler", "search_queries", params.get("search_queries", ""))
     config.set("Crawler", "search_modifiers", params.get("search_modifiers", ""))
     config.set("Crawler", "exclude_keywords", params.get("exclude_keywords", ""))
     config.set("Crawler", "min_view_count", str(params.get("min_view_count", 100000)))
@@ -99,13 +103,16 @@ def save_config(params):
     config.set("Crawler", "exclude_channels", params.get("exclude_channels", ""))
     config.set("Crawler", "published_after", params.get("published_after", ""))
     config.set("Crawler", "max_comments_per_video", str(params.get("max_comments_per_video", 100)))
+    config.set("Crawler", "enable_semantic_filter", str(params.get("enable_semantic_filter", True)).lower())
+    config.set("Crawler", "relevance_threshold", str(params.get("relevance_threshold", 70)))
+    config.set("Crawler", "campaign_briefing", params.get("campaign_briefing", ""))
     config.set("Analysis", "output_language", params.get("output_language", "Portuguese"))
     
 
     
-    config.set("Analysis", "pro_model_name", params.get("pro_model_name", config.get("Analysis", "pro_model_name", fallback="gemini-3.6-flash")))
-    config.set("Analysis", "flash_model_name", params.get("flash_model_name", config.get("Analysis", "flash_model_name", fallback="gemini-3.6-flash")))
-    config.set("Analysis", "fallback_model_name", params.get("fallback_model_name", config.get("Analysis", "fallback_model_name", fallback="gemini-3.1-pro-preview")))
+    config.set("Analysis", "pro_model_name", params.get("pro_model_name", config.get("Analysis", "pro_model_name", fallback="gemini-3.7-flash")))
+    config.set("Analysis", "flash_model_name", params.get("flash_model_name", config.get("Analysis", "flash_model_name", fallback="gemini-3.7-flash")))
+    config.set("Analysis", "fallback_model_name", params.get("fallback_model_name", config.get("Analysis", "fallback_model_name", fallback="gemini-3.6-flash")))
     config.set("Analysis", "pro_prompt_template_path", params.get("pro_prompt_template_path", config.get("Analysis", "pro_prompt_template_path", fallback="templates/prompts/topic_analysis.txt")))
     config.set("Analysis", "flash_prompt_template_path", params.get("flash_prompt_template_path", config.get("Analysis", "flash_prompt_template_path", fallback="templates/prompts/topic_flash.txt")))
     config.set("Analysis", "batch_size", str(params.get("batch_size", config.get("Analysis", "batch_size", fallback="3"))))
@@ -184,6 +191,9 @@ with tab1:
             
             st.info(f"**🧠 Strategic Rationale (Deep Thinking):**\n\n{strat.get('strategic_reasoning', '')}")
             
+            if strat.get('campaign_objective_summary'):
+                st.info(f"**🎯 Campaign Objective Summary (Relevance Filter Target):**\n\n{strat.get('campaign_objective_summary')}")
+            
             c1, c2 = st.columns(2)
             with c1:
                 st.write(f"**Primary Search Subject:** `{strat.get('primary_search_term', '')}`")
@@ -208,6 +218,10 @@ with tab1:
                     st.session_state.crawler_exclude = ", ".join(strat.get('exclude_keywords'))
                 if strat.get('recommended_region'):
                     st.session_state.crawler_region = strat.get('recommended_region')
+                if strat.get('campaign_objective_summary'):
+                    st.session_state.campaign_briefing = strat.get('campaign_objective_summary')
+                elif briefing_input.strip():
+                    st.session_state.campaign_briefing = briefing_input.strip()
                 if strat.get('additional_context_for_analysis'):
                     st.session_state.additional_context = strat.get('additional_context_for_analysis')
                 st.success("Strategy applied to crawler configuration below!")
@@ -257,6 +271,11 @@ with tab1:
         
     # Advanced Expander (Collapsible, hidden from non-tech users)
     with st.expander("⚙️ Advanced Tuning & Execution Options", expanded=False):
+        st.markdown("### 🎯 AI Semantic Relevance Filter")
+        st.checkbox("Enable AI Semantic Relevance Filter", value=st.session_state.enable_semantic_filter, key="enable_semantic_filter", help="Use two-stage AI semantic filtering to eliminate off-topic videos before comment extraction.")
+        st.slider("Relevance Score Threshold (0-100)", min_value=50, max_value=95, value=st.session_state.relevance_threshold, step=5, key="relevance_threshold", help="Minimum relevance score (0-100) required to keep a video (default: 70).")
+        
+        st.markdown("---")
         st.markdown("### Search Fine-Tuning")
         st.text_input("Search Modifiers (Optional)", key="crawler_mod", help="Keywords appended to search (comma-separated, e.g. 'review, unboxing')")
         st.text_input("Exclude Keywords (Optional)", key="crawler_exclude", help="Ignore videos containing these keywords (comma-separated)")
@@ -359,6 +378,23 @@ with tab1:
             temp_config.set("Crawler", "include_channels", st.session_state.crawler_include_ch)
             temp_config.set("Crawler", "exclude_channels", st.session_state.crawler_exclude_ch)
             temp_config.set("Crawler", "published_after", st.session_state.crawler_published_after)
+            temp_config.set("Crawler", "enable_semantic_filter", str(getattr(st.session_state, 'enable_semantic_filter', True)).lower())
+            temp_config.set("Crawler", "relevance_threshold", str(getattr(st.session_state, 'relevance_threshold', 70)))
+            
+            # Reviewer Finding 4: In Guided Mode, set campaign_briefing to briefing/objective summary; in Manual Mode, set to crawler_search
+            if "Guided Mode" in analysis_mode:
+                briefing_val = ""
+                if "generated_strategy" in st.session_state and st.session_state.generated_strategy and st.session_state.generated_strategy.get('campaign_objective_summary'):
+                    briefing_val = st.session_state.generated_strategy.get('campaign_objective_summary')
+                elif getattr(st.session_state, 'campaign_briefing_text_input', ''):
+                    briefing_val = st.session_state.campaign_briefing_text_input
+                elif getattr(st.session_state, 'campaign_briefing', ''):
+                    briefing_val = st.session_state.campaign_briefing
+                else:
+                    briefing_val = st.session_state.crawler_search
+                temp_config.set("Crawler", "campaign_briefing", briefing_val)
+            else:
+                temp_config.set("Crawler", "campaign_briefing", st.session_state.crawler_search)
             
             if st.session_state.selected_lang_ui == "Other":
                 temp_config.set("Analysis", "output_language", st.session_state.custom_lang_ui)
@@ -546,6 +582,78 @@ with tab2:
                         st.info("⏳ **O relatório estratégico está sendo redigido pela IA...**")
                     else:
                         st.info("Strategic report not found.")
+
+                st.markdown("---")
+                st.subheader("🎯 Video Curation & Relevance Audit")
+                st.markdown("Review all discovered videos, AI relevance scores (0–100), content archetypes, and curation rationales.")
+
+                # Locate discovered_videos.csv
+                brand_name_base = selected_run_name.split(' - ')[0]
+                safe_name = re.sub(r'\W+', '', brand_name_base.replace(' ', '_'))
+                videos_csv_path = os.path.join(brand_path, f"{safe_name}_discovered_videos.csv")
+                
+                # Fallback to any *_discovered_videos.csv in the directory if exact name not found
+                if not os.path.exists(videos_csv_path):
+                    v_files = [f for f in os.listdir(brand_path) if f.endswith("_discovered_videos.csv")]
+                    if v_files:
+                        videos_csv_path = os.path.join(brand_path, v_files[0])
+
+                if os.path.exists(videos_csv_path):
+                    import pandas as pd
+                    try:
+                        df_discovered = pd.read_csv(videos_csv_path)
+                        if df_discovered.empty:
+                            st.warning("⚠️ No videos met the strict campaign relevance criteria (threshold >= 70). Try broadening search queries or lowering the relevance threshold in the setup tab.")
+                        else:
+                            # Map and select required columns: Title, Channel, Views, Relevance Score, Content Archetype, Reason
+                            col_mapping = {
+                                'title': 'Title',
+                                'channel': 'Channel',
+                                'views': 'Views',
+                                'relevance_score': 'Relevance Score',
+                                'content_archetype': 'Content Archetype',
+                                'relevance_reason': 'Reason'
+                            }
+                            # Ensure columns exist
+                            for k in col_mapping.keys():
+                                if k not in df_discovered.columns:
+                                    df_discovered[k] = 0 if k in ['views', 'relevance_score'] else 'N/A'
+                            
+                            display_df = df_discovered[list(col_mapping.keys())].rename(columns=col_mapping)
+                            
+                            # Summary metrics
+                            col_m1, col_m2 = st.columns(2)
+                            with col_m1:
+                                st.metric("Total Curated Videos", len(df_discovered))
+                            with col_m2:
+                                avg_score = df_discovered['relevance_score'].mean() if not df_discovered['relevance_score'].empty else 0
+                                st.metric("Average Relevance Score", f"{avg_score:.1f} / 100")
+                            
+                            st.dataframe(
+                                display_df,
+                                use_container_width=True,
+                                column_config={
+                                    "Relevance Score": st.column_config.ProgressColumn(
+                                        "Relevance Score",
+                                        help="AI Semantic Relevance Score (0-100)",
+                                        format="%d",
+                                        min_value=0,
+                                        max_value=100,
+                                    ),
+                                    "Views": st.column_config.NumberColumn(
+                                        "Views",
+                                        format="%d",
+                                    ),
+                                },
+                                hide_index=True
+                            )
+                    except Exception as e:
+                        st.error(f"Error loading discovered videos table: {e}")
+                else:
+                    if st.session_state.pipeline_running and selected_run_id == st.session_state.current_run_id:
+                        st.info("⏳ **Os vídeos estão sendo descobertos e avaliados pela IA...**")
+                    else:
+                        st.info("Discovered videos dataset not found.")
 
                 st.markdown("---")
                 st.subheader("📁 Input Files & Raw Datasets")

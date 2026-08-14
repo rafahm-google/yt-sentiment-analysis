@@ -10,9 +10,10 @@
 # 2. Performs multiple targeted searches using modifiers (e.g., "review").
 # 3. Fetches detailed video statistics for each search result.
 # 4. Filters out videos that don't meet the criteria (e.g., low views, ads).
-# 5. Calculates an engagement score for each video.
-# 6. Sorts the results by the desired metric (views, engagement, relevance).
-# 7. Saves the final, curated list to a CSV file in a brand-specific folder.
+# 5. Applies two-stage relevance filtering (deterministic heuristics + Gemini AI).
+# 6. Calculates an engagement score for each video.
+# 7. Sorts the results by the desired metric (relevance, views, engagement, date).
+# 8. Saves the final, curated list to a CSV file in a brand-specific folder.
 # ==============================================================================
 
 import os
@@ -29,6 +30,12 @@ import json
 import hashlib
 import time
 
+try:
+    from src.semantic_filter import VideoRelevanceFilter
+except ImportError:
+    from semantic_filter import VideoRelevanceFilter
+
+
 class YouTubeBrandCrawler:
     """
     A class to crawl YouTube for brand-related user-generated content.
@@ -44,6 +51,8 @@ class YouTubeBrandCrawler:
         if env_path is None:
             env_path = os.path.join(self.project_root, '.env')
             
+        self.config_path = config_path
+        self.env_path = env_path
         self._load_environment_variables(env_path)
         self._load_configuration(config_path)
         self.youtube_api = build("youtube", "v3", developerKey=self.youtube_api_key)
@@ -58,10 +67,11 @@ class YouTubeBrandCrawler:
             print("SUCCESS: Environment variables loaded.")
 
     def _load_configuration(self, config_path):
-        """Loads settings from the [Crawler] section of config.ini."""
+        """Loads settings from the [Crawler] and [Analysis] sections of config.ini."""
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Configuration file not found at {config_path}")
         
+        self.config_path = config_path
         config = configparser.ConfigParser()
         config.read(config_path)
         
@@ -75,6 +85,14 @@ class YouTubeBrandCrawler:
         self.video_type = config.get('Crawler', 'video_type', fallback='both').lower()
         self.published_after = config.get('Crawler', 'published_after', fallback='').strip()
         self.region_code = config.get('Crawler', 'region_code', fallback='US').strip().upper()
+        
+        # Context & Config Loading (Chunk 3)
+        self.additional_context = config.get('Analysis', 'additional_context', fallback='')
+        self.campaign_briefing = config.get('Crawler', 'campaign_briefing', fallback=self.search_terms)
+        if not self.campaign_briefing.strip():
+            self.campaign_briefing = self.search_terms
+        self.enable_semantic_filter = config.getboolean('Crawler', 'enable_semantic_filter', fallback=True)
+        self.relevance_threshold = config.getint('Crawler', 'relevance_threshold', fallback=70)
         
         # Format published_after to RFC 3339 if present
         if self.published_after:
@@ -97,14 +115,14 @@ class YouTubeBrandCrawler:
         exclude_str = config.get('Crawler', 'exclude_channels', fallback='')
         self.exclude_channels = [ch.strip().lower() for ch in exclude_str.split(',') if ch.strip()]
 
-        self.min_view_count = config.getint('Crawler', 'min_view_count')
-        self.sort_by = config.get('Crawler', 'sort_by')
-        self.max_results = config.getint('Crawler', 'max_results')
+        self.min_view_count = config.getint('Crawler', 'min_view_count', fallback=0)
+        self.sort_by = config.get('Crawler', 'sort_by', fallback='relevance')
+        self.max_results = config.getint('Crawler', 'max_results', fallback=20)
 
         # --- Brand-Specific Output Path (BUG FIX) ---
         safe_brand_name = re.sub(r'\W+', '', self.search_terms.replace(' ', '_'))
         run_id = config.get('General', 'run_id', fallback=safe_brand_name)
-        self.output_dir = os.path.join('outputs', run_id)
+        self.output_dir = os.path.join(self.project_root, 'outputs', run_id)
         self.output_path = os.path.join(self.output_dir, f"{safe_brand_name}_discovered_videos.csv")
         os.makedirs(self.output_dir, exist_ok=True)
         
@@ -113,6 +131,7 @@ class YouTubeBrandCrawler:
             print(f"Filtering for video type: {self.video_type}")
         if self.published_after:
             print(f"Filtering for videos published after: {self.published_after}")
+        print(f"Semantic Filter Enabled: {self.enable_semantic_filter} (Threshold: {self.relevance_threshold})")
         print(f"Output will be saved to '{self.output_path}'")
 
     def run_crawler(self):
@@ -206,8 +225,13 @@ class YouTubeBrandCrawler:
 
         # --- Global Query Cache Implementation (Strategy A) ---
         key_dict = {
-            "terms": self.search_terms.lower(),
-            "mods": sorted([m.lower() for m in self.search_modifiers]),
+            "terms": self.search_terms.lower() if self.search_terms else "",
+            "queries": sorted([q.lower() for q in getattr(self, 'search_queries', []) if q]),
+            "mods": sorted([m.lower() for m in self.search_modifiers if m]),
+            "exclude_keywords": sorted([k.lower() for k in self.exclude_keywords if k]),
+            "include_channels": sorted([c.lower() for c in getattr(self, 'include_channels', []) if c]),
+            "exclude_channels": sorted([c.lower() for c in getattr(self, 'exclude_channels', []) if c]),
+            "min_view_count": int(self.min_view_count),
             "region": self.region_code.lower() if self.region_code else "",
             "type": self.video_type.lower() if self.video_type else "",
             "published_after": self.published_after if self.published_after else ""
@@ -265,8 +289,16 @@ class YouTubeBrandCrawler:
                 except Exception as e:
                     print(f"Error saving to global query cache: {e}")
 
+        empty_cols = [
+            "video_id", "title", "url", "channel", "date", "views", "likes", "comments",
+            "engagement", "description", "duration", "published_at", "relevance_score",
+            "relevance_reason", "content_archetype"
+        ]
+
         if not video_ids:
             print("No videos found matching the search criteria. Exiting.")
+            print(f"Writing empty CSV with valid headers to '{self.output_path}' to protect downstream stages.")
+            pd.DataFrame(columns=empty_cols).to_csv(self.output_path, index=False)
             return
 
         print(f"\nFound {len(video_ids)} unique videos. Fetching details...")
@@ -276,7 +308,10 @@ class YouTubeBrandCrawler:
         df = self._process_and_filter_videos(video_details)
 
         if df.empty:
-            print("No videos remained after filtering. Exiting.")
+            print(f"\n[WARNING] Zero videos passed the relevance threshold (>={self.relevance_threshold}).")
+            print(f"Writing empty CSV with valid headers to '{self.output_path}' to protect downstream stages.")
+            pd.DataFrame(columns=empty_cols).to_csv(self.output_path, index=False)
+            print("Consider broadening search queries or lowering relevance_threshold in config.ini.")
             return
 
         print(f"\nSorting results by '{self.sort_by}'...")
@@ -322,49 +357,43 @@ class YouTubeBrandCrawler:
             # For robustness, we'll assume it's NOT a short if we can't verify.
             return False
 
-
     def _process_and_filter_videos(self, video_details):
         """Processes the raw API response, filters it, and returns a DataFrame."""
-        processed_videos = []
+        empty_cols = [
+            "video_id", "title", "url", "channel", "date", "views", "likes", "comments",
+            "engagement", "description", "duration", "published_at", "relevance_score",
+            "relevance_reason", "content_archetype"
+        ]
         
-        # If filtering by type, we might need to check many videos.
-        # Doing this sequentially is slow. In a production app, we'd use asyncio.
-        # For now, we'll check inside the loop but be aware of the latency.
-        
+        candidate_videos = []
         desc = "Processing Videos"
         if self.video_type != 'both':
             desc += f" (Checking for {self.video_type})"
 
         for video in tqdm(video_details, desc=desc):
-            title = video["snippet"]["title"]
-            channel_title = video["snippet"]["channelTitle"]
-            published_at = video["snippet"]["publishedAt"]
+            vid_id = video.get("id", "")
+            snippet = video.get("snippet", {})
+            title = snippet.get("title", "")
+            channel_title = snippet.get("channelTitle", "")
+            published_at = snippet.get("publishedAt", "")
+            description = snippet.get("description", "")
+            tags = snippet.get("tags", [])
             
             # Filter by date (required when results are loaded from cache)
             if self.published_after:
                 if pd.to_datetime(published_at) < pd.to_datetime(self.published_after):
                     continue
-            
-            # 1. Filter by excluded keywords in title
-            if any(keyword in title.lower() for keyword in self.exclude_keywords):
-                continue
-
-            # 1a. Filter by excluded channels dynamically
-            if self.exclude_channels and any(exc_ch in channel_title.lower() for exc_ch in self.exclude_channels):
-                continue
 
             stats = video.get("statistics", {})
             view_count = int(stats.get("viewCount", 0))
             
-            # 2. Filter by minimum view count
+            # Filter by minimum view count
             if view_count < self.min_view_count:
                 continue
 
-
-            # 3. Filter by video type (Shorts vs Videos) - Precise Check
+            # Filter by video type (Shorts vs Videos) - Precise Check
             if self.video_type != 'both':
-                is_short = self._is_short_video(video["id"])
-                
+                is_short = self._is_short_video(vid_id)
                 if self.video_type == 'shorts' and not is_short:
                     continue
                 if self.video_type == 'videos' and is_short:
@@ -373,25 +402,65 @@ class YouTubeBrandCrawler:
             like_count = int(stats.get("likeCount", 0))
             comment_count = int(stats.get("commentCount", 0))
             
-            processed_videos.append({
-                "video_id": video["id"],
+            candidate_videos.append({
+                "video_id": vid_id,
                 "title": title,
-                "url": f"https://www.youtube.com/watch?v={video['id']}",
+                "url": f"https://www.youtube.com/watch?v={vid_id}",
                 "channel": channel_title,
                 "date": published_at,
                 "views": view_count,
                 "likes": like_count,
                 "comments": comment_count,
                 "engagement": like_count + comment_count,
-                "description": video["snippet"]["description"],
+                "description": description,
                 "duration": video.get("contentDetails", {}).get("duration", ""),
-                "published_at": video.get("snippet", {}).get("publishedAt", "")
+                "published_at": published_at,
+                "tags": tags
             })
         
-        return pd.DataFrame(processed_videos)
+        if not candidate_videos:
+            return pd.DataFrame(columns=empty_cols)
+
+        if self.enable_semantic_filter:
+            relevance_filter = VideoRelevanceFilter(
+                config_path=self.config_path,
+                relevance_threshold=self.relevance_threshold
+            )
+            relevant_videos, rejected = relevance_filter.filter_videos(
+                video_details=candidate_videos,
+                campaign_objective=self.campaign_briefing,
+                additional_context=self.additional_context,
+                exclude_keywords=self.exclude_keywords,
+                exclude_channels=self.exclude_channels,
+                region_code=self.region_code,
+                threshold=self.relevance_threshold
+            )
+            if not relevant_videos:
+                return pd.DataFrame(columns=empty_cols)
+            return pd.DataFrame(relevant_videos)
+        else:
+            # Legacy deterministic filtering mode
+            filtered_videos = []
+            for cand in candidate_videos:
+                title = cand["title"]
+                channel_title = cand["channel"]
+                if any(keyword in title.lower() for keyword in self.exclude_keywords):
+                    continue
+                if self.exclude_channels and any(exc_ch in channel_title.lower() for exc_ch in self.exclude_channels):
+                    continue
+                cand["relevance_score"] = 100
+                cand["relevance_reason"] = "Semantic filter disabled"
+                cand["content_archetype"] = "N/A"
+                filtered_videos.append(cand)
+            if not filtered_videos:
+                return pd.DataFrame(columns=empty_cols)
+            return pd.DataFrame(filtered_videos)
 
     def _sort_results(self, df):
         """Sorts the DataFrame based on the configuration."""
+        if df.empty:
+            return df
+
         if self.sort_by == 'viewCount':
             return df.sort_values(by="views", ascending=False).reset_index(drop=True)
         elif self.sort_by == 'engagement':
@@ -401,8 +470,16 @@ class YouTubeBrandCrawler:
             df = df.sort_values(by="parsed_date", ascending=False).reset_index(drop=True)
             df = df.drop(columns=['parsed_date'])
             return df
-        else: # Default to relevance (which is the default API return order, so no-op)
+        elif self.sort_by == 'relevance':
+            if 'relevance_score' in df.columns:
+                # Sort by AI relevance score descending, using engagement and views as tiebreakers
+                return df.sort_values(by=['relevance_score', 'engagement', 'views'], ascending=[False, False, False]).reset_index(drop=True)
             return df
+        else: # Default to relevance
+            if 'relevance_score' in df.columns:
+                return df.sort_values(by=['relevance_score', 'engagement', 'views'], ascending=[False, False, False]).reset_index(drop=True)
+            return df
+
 
 if __name__ == "__main__":
     import argparse

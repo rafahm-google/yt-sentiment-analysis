@@ -86,6 +86,7 @@ def main():
                 print(f"Search Queries: {strategy.get('search_queries')}")
                 print(f"Modifiers: {strategy.get('search_modifiers')}")
                 print(f"Exclusions: {strategy.get('exclude_keywords')}")
+                print(f"Objective Summary: {strategy.get('campaign_objective_summary')}")
                 print(f"\nRationale:\n{strategy.get('strategic_reasoning')}\n")
                 
                 # Update config with strategy parameters
@@ -99,6 +100,10 @@ def main():
                     config.set('Crawler', 'exclude_keywords', ", ".join(strategy.get('exclude_keywords')))
                 if strategy.get('recommended_region'):
                     config.set('Crawler', 'region_code', strategy.get('recommended_region'))
+                if strategy.get('campaign_objective_summary'):
+                    config.set('Crawler', 'campaign_briefing', strategy.get('campaign_objective_summary'))
+                elif briefing_text:
+                    config.set('Crawler', 'campaign_briefing', briefing_text)
                 if strategy.get('additional_context_for_analysis'):
                     config.set('Analysis', 'additional_context', strategy.get('additional_context_for_analysis'))
                     
@@ -113,14 +118,41 @@ def main():
             crawler = YouTubeBrandCrawler(config_path=config_path)
             crawler.run_crawler()
             
-
+            # Check if discovered_videos.csv is empty after crawling
+            if os.path.exists(crawler.output_path):
+                import pandas as pd
+                try:
+                    df_discovered = pd.read_csv(crawler.output_path)
+                    if df_discovered.empty:
+                        print(f"\n⚠️ [WARNING] Zero videos met the campaign relevance criteria in '{crawler.output_path}'.")
+                        print("Pipeline exiting safely — skipping downstream comment extraction and analysis.")
+                        if args.step == 'all':
+                            return
+                except Exception as e:
+                    print(f"Warning: Could not read crawler output file '{crawler.output_path}': {e}")
             
         if args.step in ['all', 'comments']:
             print("\n" + "="*40)
             print(" STEP 3: EXTRACTING COMMENTS ")
             print("="*40)
             extractor = YouTubeCommentExtractor(config_path=config_path)
-            extractor.extract_comments()
+            if not os.path.exists(extractor.input_csv_path):
+                print(f"⚠️ [WARNING] Discovered videos file '{extractor.input_csv_path}' not found. Skipping comment extraction.")
+                if args.step == 'all':
+                    return
+            else:
+                import pandas as pd
+                try:
+                    df_vids = pd.read_csv(extractor.input_csv_path)
+                    if df_vids.empty:
+                        print(f"⚠️ [WARNING] Discovered videos file '{extractor.input_csv_path}' is empty. Skipping comment extraction.")
+                        if args.step == 'all':
+                            return
+                    else:
+                        extractor.extract_comments()
+                except Exception as e:
+                    print(f"Error checking input videos: {e}")
+                    extractor.extract_comments()
 
 
             

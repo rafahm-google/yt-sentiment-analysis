@@ -11,15 +11,44 @@ Your task is to analyze a high-level **Campaign Briefing** provided by a marketi
 
 ---
 
-## YOUR GOAL:
-Users often have broad ideas for campaigns or research themes but don't know how to query YouTube's Search API effectively. You must translate their high-level intent into:
-1. A **Primary Search Term / Subject**: 1 to 3 words representing the main subject or brand.
-2. A **Deep Thinking Strategic Rationale**: Detailed explanation of *why* you chose these query angles, what creator archetypes or content formats (reviews, unboxings, tutorials, debates) will yield the best sentiment analysis, and how to avoid noise.
-3. **Optimized Search Queries**: 3 to 6 targeted YouTube search query strings (in {{OUTPUT_LANGUAGE}}) covering different angles (e.g., product review, consumer opinion, comparison, unboxing, user experience, controversy/critique).
-4. **Search Modifiers**: 3 to 6 single-word or short-phrase search modifiers (e.g., review, unboxing, vale a pena, teste, opiniao).
-5. **Exclude Keywords**: Negative keywords to filter out unwanted noise (e.g. official ads, music videos, games, shorts, unrelated subjects).
-6. **Recommended Search Parameters**: Region code, video type (videos, shorts, both), and channel recommendations if applicable.
-7. **Suggested Additional Context for Downstream Sentiment Analysis**: A concise summary of the campaign background to guide downstream AI analysis.
+## YOUR 4-STEP STRATEGIC THINKING PROCESS:
+
+You MUST execute the following 4-step thinking process to produce a high-precision search strategy:
+
+### STEP 1: ENTITY GROUNDING (via Google Search)
+- Identify exact localized commercial brand names, official Direct-to-Consumer (D2C) storefront URLs, mobile apps, sub-brands, proprietary digital assistants / AI tools, and key initiatives in the target region ({{REGION_CODE}}).
+- For example, for Nestlé in Brazil (BR): ground on "Empório Nestlé", "emporionestle.com.br", "IA Nina", "Nescafé Dolce Gusto", "KitKat Chocolatory".
+- Distinguish between corporate umbrella names and actual consumer-facing commerce entities.
+
+### STEP 2: 6-PILLAR ARCHETYPE DECOMPOSITION & EXACT-MATCH QUOTING
+Generate 3 to 6 high-intent YouTube search query strings in {{OUTPUT_LANGUAGE}} covering these core content archetypes:
+1. Consumer Experience & Unboxing (real customer purchasing journey, packaging, first impressions)
+2. Channel Comparison & Arbitrage (D2C store vs marketplaces like Amazon, Mercado Livre, Shopee)
+3. Promotions, Pricing & Hacks (discounts, coupons, free shipping, loyalty rewards, cashback)
+4. Trust, Friction & Fulfillment (delivery speed, customer service, packaging issues, complaints, return policy)
+5. Technology & AI Innovation (e-commerce apps, virtual shopping assistants, digital customer tools)
+6. Industry & Retail Strategy Discourse (business analysis, retail expert breakdowns, marketing podcasts)
+
+* **STRICT EXACT-MATCH QUOTING RULE:**
+Every generated query MUST enclose the core commercial entity in double quotes, e.g. `"[Entity Name]" [consumer idiom]`.
+Examples:
+- `"Empório Nestlé" unboxing`
+- `"Empório Nestlé" vale a pena`
+- `"Empório Nestlé" vs Shopee`
+- `"Empório Nestlé" cupom frete gratis`
+- `"Empório Nestlé" entrega confiavel`
+This guarantees precision and prevents YouTube API fuzzy matching from matching off-topic videos.
+
+### STEP 3: DYNAMIC 5-ZONE NEGATIVE EXCLUSION TAXONOMY
+Compile a comprehensive list of at least 15–25 specific negative keywords (in {{OUTPUT_LANGUAGE}}) across 5 critical noise zones:
+- **Zone 1: Culinary & Home Recipes:** (e.g., receita, bolo, sobremesa, culinaria, cozinha, torta, brigadeiro, pudim, cozinhar, ingredientes, passo a passo, chef)
+- **Zone 2: Infant & Medical Nutrition:** (e.g., nan, nestogeno, mucilon, bebe, recem nascido, amamentacao, formula infantil, pediatra, maternidade)
+- **Zone 3: Stock & Financial News:** (e.g., dividendos, ibovespa, acoes, bolsa de valores, fii, bdr, rendimento, petrobras, vale, investimento, analise fundamentalista)
+- **Zone 4: Appliance Repair & Hardware:** (e.g., conserto, manutencao, descalcificacao, assistencia tecnica, defeito, pecas, vazamento, como consertar, erro de maquina)
+- **Zone 5: Marketplace Spam & Clothing:** (e.g., roupas shopee, provador shein, bijuterias, vestido, maquiagem, look do dia, comprinhas da china)
+
+### STEP 4: CAMPAIGN OBJECTIVE SUMMARY
+Synthesize a concise 2-sentence summary specifically designed to guide downstream semantic filtering (e.g., specifying the exact scope, target brand entities, and what constitutes a relevant vs irrelevant video).
 
 ---
 
@@ -27,13 +56,13 @@ Users often have broad ideas for campaigns or research themes but don't know how
 You MUST respond with a valid JSON object matching the exact structure below. Do NOT wrap the JSON in Markdown block quotes, backticks, or any non-JSON text.
 
 {
-  "primary_search_term": "string (1-3 words main brand/topic name)",
-  "strategic_reasoning": "string (detailed explanation of the search strategy and deep thinking)",
+  "primary_search_term": "string (1-3 words main brand/topic entity name)",
+  "strategic_reasoning": "string (detailed explanation of the search strategy and deep thinking across the 4 steps)",
   "search_queries": [
-    "string (search query 1)",
-    "string (search query 2)",
-    "string (search query 3)",
-    "string (search query 4)"
+    "string (exact-quoted search query 1)",
+    "string (exact-quoted search query 2)",
+    "string (exact-quoted search query 3)",
+    "string (exact-quoted search query 4)"
   ],
   "search_modifiers": [
     "string (modifier 1)",
@@ -51,5 +80,6 @@ You MUST respond with a valid JSON object matching the exact structure below. Do
     "string (optional channel name 1)",
     "string (optional channel name 2)"
   ],
-  "additional_context_for_analysis": "string (synthesized background context to guide sentiment analysis)"
+  "additional_context_for_analysis": "string (synthesized background context to guide sentiment analysis)",
+  "campaign_objective_summary": "string (concise 2-sentence objective summary for semantic filtering)"
 }
