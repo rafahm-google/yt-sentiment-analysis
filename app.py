@@ -275,8 +275,8 @@ with tab1:
     # Advanced Expander (Collapsible, hidden from non-tech users)
     with st.expander("⚙️ Advanced Tuning & Execution Options", expanded=False):
         st.markdown("### 🎯 AI Semantic Relevance Filter")
-        st.checkbox("Enable AI Semantic Relevance Filter", value=getattr(st.session_state, 'enable_semantic_filter', True), key="enable_semantic_filter", help="Use two-stage AI semantic filtering to eliminate off-topic videos before comment extraction.")
-        st.slider("Relevance Score Threshold (0-100)", min_value=50, max_value=95, value=getattr(st.session_state, 'relevance_threshold', 70), step=5, key="relevance_threshold", help="Minimum relevance score (0-100) required to keep a video (default: 70).")
+        st.checkbox("Enable AI Semantic Relevance Filter", key="enable_semantic_filter", help="Use two-stage AI semantic filtering to eliminate off-topic videos before comment extraction.")
+        st.slider("Relevance Score Threshold (0-100)", min_value=50, max_value=95, step=5, key="relevance_threshold", help="Minimum relevance score (0-100) required to keep a video (default: 70).")
         
         st.markdown("---")
         st.markdown("### Search Fine-Tuning")
