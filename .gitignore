@@ -34,3 +34,10 @@ tests/
 run_perfume_crawls.py
 config_*.ini
 !config_eeat.ini
+
+# Cloud Run & Build Scratch Scripts (Do NOT commit to GitHub)
+cloudbuild.yaml
+deploy.sh
+Dockerfile
+.dockerignore
+.gcloudignore

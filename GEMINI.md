@@ -11,3 +11,7 @@
 ## 3. Streamlit Session State & UI Component Binding
 - Always initialize session state keys independently at the top of app.py using key-by-key checks: if key not in st.session_state.
 - When creating key-bound widgets (e.g. st.checkbox("...")), omit the redundant value parameter to avoid session state AttributeErrors when users reconnect to active sessions.
+
+## 4. Git Repository & File Commitment Constraints
+- NEVER commit build/deployment scratch files (Dockerfile, .dockerignore, .gcloudignore, cloudbuild.yaml, deploy.sh, scratch/, tests/) to Git or GitHub.
+- Git repository MUST track strictly core source code (app.py, main.py, src/, templates/, config.ini.example, requirements.txt, README.md, GEMINI.md).
