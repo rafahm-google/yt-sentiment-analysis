@@ -78,7 +78,7 @@ def run_slide_generation(config_path="config.ini"):
     """Full workflow to generate slides content as JSON, images and HTML viewer."""
     load_dotenv()
     
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(interpolation=None)
     config.read(config_path)
     brand_name = config.get('Crawler', 'search_terms')
     safe_brand_name = re.sub(r'\W+', '', brand_name.replace(' ', '_'))

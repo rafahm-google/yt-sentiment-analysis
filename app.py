@@ -24,7 +24,7 @@ CONFIG_PATH = "config.ini"
 ENV_PATH = ".env"
 
 # Initialize ConfigParser
-config = configparser.ConfigParser()
+config = configparser.ConfigParser(interpolation=None)
 
 # Load existing config or setup defaults
 if not os.path.exists(CONFIG_PATH):
@@ -353,7 +353,7 @@ with tab1:
             st.session_state.session_runs.append((f"{search_terms} - {datetime.now().strftime('%H:%M:%S')}", run_id))
             
             # Create temp config parser
-            temp_config = configparser.ConfigParser()
+            temp_config = configparser.ConfigParser(interpolation=None)
             
             # Copy existing config sections
             for section in config.sections():

@@ -49,7 +49,7 @@ class YouTubeCommentExtractor:
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Configuration file not found at {config_path}")
         
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         config.read(config_path)
         
         brand_name = config.get('Crawler', 'search_terms')

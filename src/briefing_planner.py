@@ -52,7 +52,7 @@ class BriefingPlanner:
             print("Warning: Neither GEMINI_API_KEY nor YOUTUBE_API_KEY found in env.")
 
     def _load_configuration(self):
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         if os.path.exists(self.config_path):
             config.read(self.config_path)
             

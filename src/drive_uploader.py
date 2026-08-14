@@ -232,7 +232,7 @@ def upload_run_outputs_to_drive(config_path="config.ini"):
 
     print("\n--- Enviando Arquivos para o Google Drive ---", flush=True)
     try:
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         config.read(config_path)
         
         brand_name = config.get('Crawler', 'search_terms', fallback='Analysis')

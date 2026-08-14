@@ -72,7 +72,7 @@ class YouTubeBrandCrawler:
             raise FileNotFoundError(f"Configuration file not found at {config_path}")
         
         self.config_path = config_path
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         config.read(config_path)
         
         self.search_terms = config.get('Crawler', 'search_terms', fallback='')

@@ -37,7 +37,7 @@ def main():
     from briefing_planner import BriefingPlanner
     
     # Read config for logging
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(interpolation=None)
     config.read(config_path)
     
     log_entry = {

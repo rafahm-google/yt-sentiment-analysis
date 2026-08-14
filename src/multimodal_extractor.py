@@ -129,7 +129,7 @@ class VideoMultimodalExtractor:
         output_dir: Optional[str],
     ) -> None:
         """Loads configuration from config.ini and overrides with explicit parameters."""
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         if os.path.exists(self.config_path):
             config.read(self.config_path)
 

@@ -44,7 +44,7 @@ def get_multimodal_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     Returns:
         Dict containing multimodal configuration options.
     """
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(interpolation=None)
     if config_path and os.path.exists(config_path):
         config.read(config_path)
     elif os.path.exists("config.ini"):
@@ -96,7 +96,7 @@ def get_model_names(config_path: Optional[str] = None) -> Dict[str, str]:
     """
     Retrieves model names from config.ini [Analysis] section with defaults.
     """
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(interpolation=None)
     if config_path and os.path.exists(config_path):
         config.read(config_path)
     elif os.path.exists("config.ini"):

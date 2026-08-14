@@ -117,7 +117,7 @@ class VideoRelevanceFilter:
             print("[WARNING] No API key found (GEMINI_API_KEY / GOOGLE_API_KEY / YOUTUBE_API_KEY).")
 
     def _load_configuration(self):
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         if os.path.exists(self.config_path):
             config.read(self.config_path)
 

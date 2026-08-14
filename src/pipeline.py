@@ -46,7 +46,7 @@ class CachedAnalysisPipeline:
             print("Warning: Neither GEMINI_API_KEY nor YOUTUBE_API_KEY found in env.")
 
     def _load_configuration(self):
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         config.read(self.config_path)
         
         self.brand_name = config.get('Crawler', 'search_terms')
@@ -264,7 +264,7 @@ class CachedAnalysisPipeline:
                 return None
 
     def _generate_report_file(self, report_content, videos_df):
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         config.read(self.config_path)
         requested_outputs_str = config.get('Analysis', 'requested_outputs', fallback='html,pdf,markdown,notebooklm')
         requested_outputs = [o.strip().lower() for o in requested_outputs_str.split(',') if o.strip()]
