@@ -236,48 +236,51 @@ def generate_content_with_retry(
     model: str,
     contents: Any,
     config: Optional[Any] = None,
-    fallback_model: Optional[str] = "gemini-2.5-pro",
-    max_retries: int = 3,
+    fallback_model: Optional[str] = "gemini-3.6-flash",
+    max_retries: int = 2,
     retry_delay_sec: float = 2.0,
 ) -> Any:
     """
-    Executes generate_content with exponential backoff on 503/429 errors and optional fallback model.
+    Executes generate_content with a hierarchy of Flash models:
+    gemini-3.7-flash -> gemini-3.6-flash -> gemini-3.5-flash.
+    Strictly avoids Pro models as requested.
     """
+    # Define Flash model hierarchy (strictly Flash, no Pro)
+    flash_hierarchy = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash"]
+    
+    # Build models queue ensuring starting model is first
+    model_queue = [model]
+    for m in flash_hierarchy:
+        if m not in model_queue:
+            model_queue.append(m)
+            
+    if fallback_model and fallback_model not in model_queue and "pro" not in fallback_model.lower():
+        model_queue.append(fallback_model)
+
     last_exception = None
-    delay = retry_delay_sec
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            response = client.models.generate_content(
-                model=model,
-                contents=contents,
-                config=config,
-            )
-            return response
-        except Exception as e:
-            last_exception = e
-            err_str = str(e)
-            if "503" in err_str or "429" in err_str or "UNAVAILABLE" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                logger.warning(
-                    f"Model {model} busy (attempt {attempt}/{max_retries}). Retrying in {delay:.1f}s... Error: {e}"
+    for current_model in model_queue:
+        delay = retry_delay_sec
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = client.models.generate_content(
+                    model=current_model,
+                    contents=contents,
+                    config=config,
                 )
-                time.sleep(delay)
-                delay *= 2
-            else:
-                logger.error(f"Generate content error with model {model}: {e}")
-                break
+                return response
+            except Exception as e:
+                last_exception = e
+                err_str = str(e)
+                if "503" in err_str or "429" in err_str or "UNAVAILABLE" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    logger.warning(
+                        f"Model {current_model} temporary error ({attempt}/{max_retries}). Retrying in {delay:.1f}s... Error: {e}"
+                    )
+                    time.sleep(delay)
+                    delay *= 2
+                else:
+                    logger.error(f"Generate content error with model {current_model}: {e}")
+                    break
+        logger.warning(f"Model {current_model} exhausted retries. Trying next Flash fallback model in hierarchy...")
 
-    if fallback_model and fallback_model != model:
-        logger.info(f"Primary model {model} failed. Falling back to {fallback_model}...")
-        try:
-            response = client.models.generate_content(
-                model=fallback_model,
-                contents=contents,
-                config=config,
-            )
-            return response
-        except Exception as fb_err:
-            logger.error(f"Fallback model {fallback_model} also failed: {fb_err}")
-            raise fb_err from last_exception
-
-    raise last_exception
+    raise last_exception or RuntimeError("All Flash models in hierarchy failed.")

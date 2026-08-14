@@ -115,7 +115,7 @@ Additional Context: {{ADDITIONAL_CONTEXT}}
         return strategy
 
     def _call_gemini_json(self, prompt, model_name, fallback_model_name=None, enable_google_search=True):
-        """Calls Gemini API with JSON response mime type and schema, optional Search Grounding, 503 retries, and model fallback."""
+        """Calls Gemini API with JSON response mime type and schema using Flash model hierarchy (3.7 -> 3.6 -> 3.5)."""
         kwargs = {
             "response_mime_type": "application/json",
             "response_schema": CampaignStrategySchema
@@ -125,37 +125,30 @@ Additional Context: {{ADDITIONAL_CONTEXT}}
             
         config = types.GenerateContentConfig(**kwargs)
         
-        for attempt in range(3):
-            try:
-                print(f"Calling Gemini API ({model_name}) - Attempt {attempt + 1}...")
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                    config=config
-                )
-                if response and response.text:
-                    return response.text
-            except Exception as e:
-                if "503" in str(e) or "UNAVAILABLE" in str(e) or "OVERLOADED" in str(e):
-                    print(f"Model {model_name} overloaded (503). Retrying in 4 seconds...")
-                    time.sleep(4)
-                else:
-                    print(f"Error calling model {model_name}: {e}")
-                    break
-        
-        if fallback_model_name:
-            print(f"Primary model {model_name} failed. Attempting fallback model {fallback_model_name}...")
-            try:
-                response = self.client.models.generate_content(
-                    model=fallback_model_name,
-                    contents=prompt,
-                    config=config
-                )
-                if response and response.text:
-                    print(f"SUCCESS: Received response from fallback model {fallback_model_name}.")
-                    return response.text
-            except Exception as e_fb:
-                print(f"Fallback model {fallback_model_name} also failed: {e_fb}")
+        flash_hierarchy = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash"]
+        models_to_try = []
+        for m in [model_name, fallback_model_name] + flash_hierarchy:
+            if m and m not in models_to_try and "pro" not in m.lower():
+                models_to_try.append(m)
+
+        for current_model in models_to_try:
+            for attempt in range(2):
+                try:
+                    print(f"Calling Gemini API ({current_model}) - Attempt {attempt + 1}...")
+                    response = self.client.models.generate_content(
+                        model=current_model,
+                        contents=prompt,
+                        config=config
+                    )
+                    if response and response.text:
+                        return response.text
+                except Exception as e:
+                    if "503" in str(e) or "UNAVAILABLE" in str(e) or "OVERLOADED" in str(e) or "429" in str(e):
+                        print(f"Model {current_model} temporary error. Retrying in 3 seconds...")
+                        time.sleep(3)
+                    else:
+                        print(f"Error calling model {current_model}: {e}")
+                        break
 
         return None
 

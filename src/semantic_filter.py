@@ -341,9 +341,11 @@ Your task is to evaluate the relevance of YouTube video candidates against a spe
         )
 
         response_text = None
-        models_to_try = [self.model_name]
-        if self.fallback_model_name and self.fallback_model_name != self.model_name:
-            models_to_try.append(self.fallback_model_name)
+        flash_hierarchy = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash"]
+        models_to_try = []
+        for m in [self.model_name, getattr(self, 'fallback_model_name', 'gemini-3.6-flash')] + flash_hierarchy:
+            if m and m not in models_to_try and "pro" not in m.lower():
+                models_to_try.append(m)
 
         for current_model in models_to_try:
             print(f"🧠 Evaluating batch of {len(chunk)} videos using {current_model}...")

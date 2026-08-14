@@ -416,6 +416,11 @@ with tab1:
             temp_config.set("Analysis", "additional_context", st.session_state.additional_context)
             temp_config.set("Analysis", "requested_outputs", getattr(st.session_state, 'requested_outputs', 'html,pdf,markdown,notebooklm'))
             
+            if not temp_config.has_section("Drive"):
+                temp_config.add_section("Drive")
+            temp_config.set("Drive", "folder_id", os.getenv("DRIVE_FOLDER_ID", "1MsXuPKrR6MM6o02NXt-yPE-Hwj7caiCT"))
+            temp_config.set("Drive", "resource_key", os.getenv("DRIVE_RESOURCE_KEY", "0-X26e-T0YzerdpL_8vA-uRg"))
+            
             # Write temp config to disk
             os.makedirs("outputs/cache", exist_ok=True)
             temp_config_path = f"outputs/cache/config_{run_id}.ini"

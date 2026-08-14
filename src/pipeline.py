@@ -51,6 +51,7 @@ class CachedAnalysisPipeline:
         
         self.brand_name = config.get('Crawler', 'search_terms')
         self.safe_brand_name = re.sub(r'\W+', '', self.brand_name.replace(' ', '_'))
+        self.run_id = config.get('General', 'run_id', fallback=self.safe_brand_name)
         self.pro_model_name = config.get('Analysis', 'pro_model_name', fallback='gemini-3.7-flash')
         self.flash_model_name = config.get('Analysis', 'flash_model_name', fallback='gemini-3.7-flash')
         self.fallback_model_name = config.get('Analysis', 'fallback_model_name', fallback='gemini-3.6-flash')
